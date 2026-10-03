@@ -46,7 +46,7 @@ class ContextBuilderTest {
             Fixtures.ignored("node_modules/x/index.js", "Dependency directory"));
 
     /** Serves files from a map, recording what was requested; unknown paths are 404s. */
-    static final class FakeSnapshot implements SourceSnapshot {
+    static class FakeSnapshot implements SourceSnapshot {
         final Map<String, byte[]> files = new HashMap<>();
         final List<String> requested = new ArrayList<>();
 
