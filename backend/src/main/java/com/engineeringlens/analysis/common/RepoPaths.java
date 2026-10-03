@@ -80,8 +80,14 @@ public final class RepoPaths {
             "^test_.+\\.py$|.+_test\\.py$|.+\\.(test|spec)\\.(js|jsx|ts|tsx|mjs|cjs|vue)$|.+(Test|Tests|IT)\\.(java|kt|scala|groovy)$"
                     + "|.+_test\\.go$|.+_spec\\.rb$|.+Tests?\\.cs$");
 
+    /** Test infrastructure, not tests: pytest's shared fixtures and Python package markers. */
+    private static final Set<String> NOT_TESTS = Set.of("conftest.py", "__init__.py");
+
     /** Recognised by name (test_x.py, x.test.ts, XTest.java, x_test.go) or by living in a test folder as code. */
     public static boolean isTestFile(String path, String language) {
+        if (NOT_TESTS.contains(lowerName(path))) {
+            return false;
+        }
         if (TEST_NAME.matcher(fileName(path)).matches()) {
             return true;
         }

@@ -108,6 +108,7 @@ export type ImportedRepository = {
   url: string
   description: string | null
   defaultBranch: string
+  commitSha: string | null
   primaryLanguage: string | null
   visibility: 'PUBLIC' | 'PRIVATE'
   stars: number
@@ -131,3 +132,41 @@ export const importRepository = (url: string) =>
 export const getRepository = (id: string) => api<ImportedRepository>(`/api/repositories/${encodeURIComponent(id)}`)
 
 export const getRepositories = () => api<RepositoryListItem[]>('/api/repositories')
+
+export type Detection = { name: string; confidence: 'HIGH' | 'MEDIUM' | 'LOW'; evidence: string[] }
+
+/** One "prepare for review" run: profile → deterministic signals → context. No AI involved. */
+export type AnalysisRun = {
+  id: string
+  repositoryId: string
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  commitSha: string | null
+  failureReason: string | null
+  completedAt: string | null
+  durationMs: number | null
+  stats: {
+    filesFetched: number | null
+    bytesFetched: number | null
+    signalCount: number | null
+    contextFileCount: number | null
+    contextBytes: number | null
+  }
+  profile: {
+    languages: { name: string; fileCount: number; percentage: number }[]
+    frameworks: Detection[]
+    databases: Detection[]
+  } | null
+}
+
+export const prepareRepository = (repositoryId: string) =>
+  api<AnalysisRun>(`/api/repositories/${encodeURIComponent(repositoryId)}/analyses`, { method: 'POST' })
+
+/** The latest preparation run, or null if the repository was never prepared. */
+export async function getLatestAnalysis(repositoryId: string) {
+  try {
+    return await api<AnalysisRun>(`/api/repositories/${encodeURIComponent(repositoryId)}/analyses/latest`)
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null
+    throw e
+  }
+}

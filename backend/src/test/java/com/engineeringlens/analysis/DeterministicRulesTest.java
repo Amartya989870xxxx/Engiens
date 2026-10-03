@@ -70,8 +70,9 @@ class DeterministicRulesTest {
     }
 
     @Test
-    void fixturesInATestFolderAreNotTestFiles() {
-        Signal s = only(TestingRules.TEST_FILES, input("src/app.py", "tests/fixtures/orders.json"));
+    void fixturesAndTestInfrastructureAreNotTestFiles() {
+        Signal s = only(TestingRules.TEST_FILES, input("src/app.py", "tests/fixtures/orders.json", "tests/conftest.py",
+                "tests/__init__.py"));
         assertThat(s.evidence()).containsEntry("testFileCount", 0);
     }
 

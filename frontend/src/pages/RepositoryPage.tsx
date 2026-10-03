@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, getRepository, type ImportedRepository, type LabelCount } from '../api'
+import { ReviewPreparation } from '../repositories/ReviewPreparation'
 import { useImportRepository } from '../repositories/useImportRepository'
 import { Button } from '../ui'
 
@@ -67,6 +68,7 @@ function Overview({ repo }: { repo: ImportedRepository }) {
       </dl>
 
       {repo.status === 'READY' && <Inventory repo={repo} />}
+      {repo.status === 'READY' && <ReviewPreparation repositoryId={repo.id} />}
 
       <section className="mt-12 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-line pt-8">
         <Button type="button" disabled title="Analysis is the next feature being built">

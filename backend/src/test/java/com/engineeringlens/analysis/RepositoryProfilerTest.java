@@ -61,7 +61,7 @@ class RepositoryProfilerTest {
         assertThat(p.manifests()).singleElement().satisfies(m -> assertThat(m.declaredDependencies()).isEqualTo(6));
 
         assertThat(p.testing().testsDetected()).isTrue();
-        assertThat(p.testing().testFileCount()).isEqualTo(2);
+        assertThat(p.testing().testFileCount()).isEqualTo(1); // conftest.py is test configuration, not a test
         assertThat(p.testing().testDirectories()).containsExactly("tests");
         assertThat(names(p.testing().frameworks())).containsExactly("pytest");
 
