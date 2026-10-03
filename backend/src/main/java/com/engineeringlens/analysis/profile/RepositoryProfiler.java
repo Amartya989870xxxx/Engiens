@@ -296,11 +296,14 @@ public class RepositoryProfiler {
         d.dependency("Playwright", "npm", "@playwright/test");
         d.dependency("Cypress", "npm", "cypress");
         d.dependencyMatching("Testing Library", "npm", n -> n.startsWith("@testing-library/"), "an @testing-library package");
+        // Spring Boot's test starters bring JUnit Jupiter; Boot 4 splits them per module (spring-boot-starter-webmvc-test…).
         d.dependencyMatching("JUnit", "jvm",
-                n -> n.equals("junit") || n.startsWith("junit-jupiter") || n.equals("spring-boot-starter-test"),
-                "JUnit (directly or via spring-boot-starter-test)");
+                n -> n.equals("junit") || n.startsWith("junit-jupiter") || n.matches("spring-boot-starter(-[\\w-]+)?-test")
+                        || n.equals("testcontainers-junit-jupiter"),
+                "JUnit (directly or via a Spring Boot test starter)");
         d.dependency("Mockito", "jvm", "mockito-core");
-        d.dependency("Testcontainers", "jvm", "testcontainers", "org.testcontainers:junit-jupiter");
+        d.dependencyMatching("Testcontainers", "jvm", n -> n.startsWith("testcontainers") || n.startsWith("org.testcontainers:")
+                || n.equals("spring-boot-testcontainers"), "a Testcontainers module");
         if (testFiles.stream().anyMatch(p -> p.endsWith("_test.go"))) {
             d.add("Go test", Confidence.HIGH, "_test.go files present");
         }

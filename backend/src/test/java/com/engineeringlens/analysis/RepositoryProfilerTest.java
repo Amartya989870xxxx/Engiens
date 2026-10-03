@@ -211,4 +211,17 @@ class RepositoryProfilerTest {
         assertThat(names(p.testing().frameworks())).containsExactly("pytest");
         assertThat(p.manifests().get(0).declaredDependencies()).isEqualTo(5);
     }
+
+    @Test
+    void springBoot4ModularTestStartersMeanJUnit() {
+        RepositoryProfile p = profile(Fixtures.inventory("build.gradle", "src/test/java/x/OwnerControllerTests.java"), Map.of(
+                "build.gradle", """
+                        plugins { id 'org.springframework.boot' version '4.0.0' }
+                        dependencies {
+                          testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+                          testImplementation 'org.testcontainers:testcontainers-mysql'
+                        }"""));
+        assertThat(names(p.testing().frameworks())).containsExactly("JUnit", "Testcontainers");
+        assertThat(detection(p.frameworks(), "Spring Boot").confidence()).isEqualTo(Confidence.HIGH);
+    }
 }
