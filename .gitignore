@@ -1,0 +1,12 @@
+.env
+target/
+node_modules/
+dist/
+.idea/
+.vscode/
+.DS_Store
+*.log
+
+# GitHub App private key and other local secrets
+*.pem
+secrets/
