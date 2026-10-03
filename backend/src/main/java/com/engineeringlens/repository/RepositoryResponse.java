@@ -12,6 +12,8 @@ public record RepositoryResponse(
         String url,
         String description,
         String defaultBranch,
+        /** The imported commit; null for imports made before commits were recorded. */
+        String commitSha,
         String primaryLanguage,
         RepositoryVisibility visibility,
         int stars,

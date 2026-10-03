@@ -58,4 +58,12 @@ public class RepoFile {
         this.ignored = c.ignored();
         this.ignoreReason = c.ignoreReason();
     }
+
+    public String getPath() { return path; }
+    public String getFileName() { return fileName; }
+    public String getExtension() { return extension; }
+    public String getLanguage() { return language; }
+    public long getSizeBytes() { return sizeBytes; }
+    public boolean isIgnored() { return ignored; }
+    public String getIgnoreReason() { return ignoreReason; }
 }

@@ -19,6 +19,7 @@ import com.engineeringlens.github.GitHubRepoDetails;
 import com.engineeringlens.github.GitHubRepoUrl;
 import com.engineeringlens.github.GitHubRepositoryReader;
 import com.engineeringlens.github.GitHubRepositoryReader.RemoteRepository;
+import com.engineeringlens.github.GitHubRepositoryReader.RepositorySnapshot;
 import com.engineeringlens.github.GitHubTree;
 
 /**
@@ -76,8 +77,9 @@ public class RepositoryImportService {
         }
 
         try {
-            List<FileClassifier.Classification> inventory = classify(github.readTree(remote));
-            saveInventory(repo, inventory);
+            RepositorySnapshot snapshot = github.readSnapshot(remote);
+            List<FileClassifier.Classification> inventory = classify(snapshot.tree());
+            saveInventory(repo, snapshot.commitSha(), inventory);
         } catch (ApiException e) {
             markFailed(repo, e.getMessage());
             throw e;
@@ -141,12 +143,12 @@ public class RepositoryImportService {
     }
 
     /** Replaces the file list and marks the repository READY in one transaction: all or nothing. */
-    private void saveInventory(ImportedRepo repo, List<FileClassifier.Classification> inventory) {
+    private void saveInventory(ImportedRepo repo, String commitSha, List<FileClassifier.Classification> inventory) {
         int relevant = (int) inventory.stream().filter(c -> !c.ignored()).count();
         transaction.executeWithoutResult(status -> {
             files.deleteAllForRepository(repo.getId());
             files.saveAll(inventory.stream().map(c -> new RepoFile(repo.getId(), c)).toList());
-            repo.markReady(inventory.size(), relevant, inventory.size() - relevant);
+            repo.markReady(commitSha, inventory.size(), relevant, inventory.size() - relevant);
             repositories.save(repo);
         });
     }
@@ -160,7 +162,7 @@ public class RepositoryImportService {
         List<RepositoryResponse.Count> languages = counts(files.relevantLanguages(r.getId()));
         List<RepositoryResponse.Count> ignored = counts(files.ignoreReasons(r.getId()));
         return new RepositoryResponse(r.getId(), r.getGithubOwner(), r.getGithubRepoName(), r.getGithubUrl(),
-                r.getDescription(), r.getDefaultBranch(), r.getPrimaryLanguage(), r.getVisibility(), r.getStars(),
+                r.getDescription(), r.getDefaultBranch(), r.getCommitSha(), r.getPrimaryLanguage(), r.getVisibility(), r.getStars(),
                 r.getForks(), r.getFileCount(), r.getRelevantFileCount(), r.getIgnoredFileCount(), r.getStatus(),
                 r.getFailureReason(), r.getUpdatedAt(), languages, ignored);
     }

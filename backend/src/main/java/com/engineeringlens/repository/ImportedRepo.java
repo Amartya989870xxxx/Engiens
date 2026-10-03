@@ -40,6 +40,10 @@ public class ImportedRepo {
     @Column(name = "default_branch", nullable = false)
     private String defaultBranch;
 
+    /** The commit the inventory was taken from; null for imports made before commits were recorded. */
+    @Column(name = "commit_sha")
+    private String commitSha;
+
     @Column(name = "primary_language")
     private String primaryLanguage;
 
@@ -103,7 +107,8 @@ public class ImportedRepo {
         this.updatedAt = Instant.now();
     }
 
-    public void markReady(int fileCount, int relevantFileCount, int ignoredFileCount) {
+    public void markReady(String commitSha, int fileCount, int relevantFileCount, int ignoredFileCount) {
+        this.commitSha = commitSha;
         this.fileCount = fileCount;
         this.relevantFileCount = relevantFileCount;
         this.ignoredFileCount = ignoredFileCount;
@@ -124,6 +129,7 @@ public class ImportedRepo {
     public String getGithubUrl() { return githubUrl; }
     public String getDescription() { return description; }
     public String getDefaultBranch() { return defaultBranch; }
+    public String getCommitSha() { return commitSha; }
     public String getPrimaryLanguage() { return primaryLanguage; }
     public RepositoryVisibility getVisibility() { return visibility; }
     public int getStars() { return stars; }

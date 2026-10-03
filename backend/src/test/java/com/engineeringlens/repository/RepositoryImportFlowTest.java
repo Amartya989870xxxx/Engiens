@@ -29,6 +29,7 @@ import com.engineeringlens.common.ApiException;
 import com.engineeringlens.github.GitHubRepoDetails;
 import com.engineeringlens.github.GitHubRepositoryReader;
 import com.engineeringlens.github.GitHubRepositoryReader.RemoteRepository;
+import com.engineeringlens.github.GitHubRepositoryReader.RepositorySnapshot;
 import com.engineeringlens.github.GitHubTree;
 import com.jayway.jsonpath.JsonPath;
 
@@ -51,6 +52,12 @@ class RepositoryImportFlowTest {
 
     private static GitHubTree tree(GitHubTree.Entry... entries) {
         return new GitHubTree(false, List.of(entries));
+    }
+
+    static final String COMMIT = "0123456789abcdef0123456789abcdef01234567";
+
+    private static RepositorySnapshot snapshot(GitHubTree tree) {
+        return new RepositorySnapshot(COMMIT, tree);
     }
 
     private static GitHubTree.Entry file(String path, long size) {
@@ -87,7 +94,7 @@ class RepositoryImportFlowTest {
         String auth = register("import@example.com");
         RemoteRepository remote = remote("asha", "orders-api", false, null);
         when(github.read(any(), eq("asha"), eq("orders-api"))).thenReturn(remote);
-        when(github.readTree(remote)).thenReturn(SMALL_PROJECT);
+        when(github.readSnapshot(remote)).thenReturn(snapshot(SMALL_PROJECT));
 
         String id = idOf(importRepo(auth, "https://github.com/asha/orders-api")
                 .andExpect(status().isOk())
@@ -97,6 +104,7 @@ class RepositoryImportFlowTest {
                 .andExpect(jsonPath("$.defaultBranch").value("main"))
                 .andExpect(jsonPath("$.stars").value(12))
                 .andExpect(jsonPath("$.status").value("READY"))
+                .andExpect(jsonPath("$.commitSha").value(COMMIT))
                 .andExpect(jsonPath("$.fileCount").value(6))
                 .andExpect(jsonPath("$.relevantFileCount").value(4))
                 .andExpect(jsonPath("$.ignoredFileCount").value(2))
@@ -121,7 +129,7 @@ class RepositoryImportFlowTest {
         String auth = register("twice@example.com");
         RemoteRepository remote = remote("asha", "twice", false, null);
         when(github.read(any(), eq("asha"), eq("twice"))).thenReturn(remote);
-        when(github.readTree(remote)).thenReturn(SMALL_PROJECT);
+        when(github.readSnapshot(remote)).thenReturn(snapshot(SMALL_PROJECT));
 
         String first = idOf(importRepo(auth, "https://github.com/asha/twice"));
         // Different casing and a trailing path still mean the same repository.
@@ -139,7 +147,7 @@ class RepositoryImportFlowTest {
         String stranger = register("stranger@example.com");
         RemoteRepository remote = remote("asha", "mine", false, null);
         when(github.read(any(), eq("asha"), eq("mine"))).thenReturn(remote);
-        when(github.readTree(remote)).thenReturn(SMALL_PROJECT);
+        when(github.readSnapshot(remote)).thenReturn(snapshot(SMALL_PROJECT));
         String id = idOf(importRepo(owner, "https://github.com/asha/mine"));
 
         mvc.perform(get("/api/repositories/" + id).header("Authorization", stranger))
@@ -155,7 +163,7 @@ class RepositoryImportFlowTest {
         String auth = register("private@example.com");
         RemoteRepository remote = remote("asha", "secret-app", true, 7L);
         when(github.read(any(), eq("asha"), eq("secret-app"))).thenReturn(remote);
-        when(github.readTree(remote)).thenReturn(SMALL_PROJECT);
+        when(github.readSnapshot(remote)).thenReturn(snapshot(SMALL_PROJECT));
 
         importRepo(auth, "https://github.com/asha/secret-app")
                 .andExpect(status().isOk())
@@ -172,7 +180,7 @@ class RepositoryImportFlowTest {
         for (int i = 0; i <= RepositoryImportService.MAX_TOTAL_FILES; i++) {
             entries.add(file("src/file" + i + ".ts", 100));
         }
-        when(github.readTree(remote)).thenReturn(new GitHubTree(false, entries));
+        when(github.readSnapshot(remote)).thenReturn(snapshot(new GitHubTree(false, entries)));
 
         importRepo(auth, "https://github.com/asha/monorepo")
                 .andExpect(status().isUnprocessableContent())
@@ -194,7 +202,7 @@ class RepositoryImportFlowTest {
         String auth = register("truncated@example.com");
         RemoteRepository remote = remote("asha", "giant", false, null);
         when(github.read(any(), eq("asha"), eq("giant"))).thenReturn(remote);
-        when(github.readTree(remote)).thenReturn(new GitHubTree(true, List.of(file("a.ts", 1))));
+        when(github.readSnapshot(remote)).thenReturn(snapshot(new GitHubTree(true, List.of(file("a.ts", 1)))));
 
         importRepo(auth, "https://github.com/asha/giant")
                 .andExpect(jsonPath("$.code").value("REPOSITORY_TOO_LARGE"));
@@ -205,9 +213,9 @@ class RepositoryImportFlowTest {
         String auth = register("retry@example.com");
         RemoteRepository remote = remote("asha", "flaky", false, null);
         when(github.read(any(), eq("asha"), eq("flaky"))).thenReturn(remote);
-        when(github.readTree(remote))
+        when(github.readSnapshot(remote))
                 .thenThrow(new ApiException(HttpStatus.BAD_GATEWAY, "GITHUB_UNAVAILABLE", "Could not reach GitHub. Please try again."))
-                .thenReturn(SMALL_PROJECT);
+                .thenReturn(snapshot(SMALL_PROJECT));
 
         importRepo(auth, "https://github.com/asha/flaky").andExpect(status().isBadGateway());
         String failedId = JsonPath.read(mvc.perform(get("/api/repositories").header("Authorization", auth))

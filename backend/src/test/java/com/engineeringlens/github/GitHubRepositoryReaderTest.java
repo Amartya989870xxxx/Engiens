@@ -66,10 +66,11 @@ class GitHubRepositoryReaderTest {
         assertThat(repo.installationId()).isEqualTo(7L);
         assertThat(repo.details().privateRepo()).isTrue();
 
-        // The tree is read with a freshly minted token for the same installation.
+        // The snapshot is pinned to a commit, read with a freshly minted token for the same installation.
         when(app.installationToken(7)).thenReturn("ghs_2");
-        reader.readTree(repo);
-        verify(github).getTree("asha", "lens", "main", "ghs_2");
+        when(github.getCommitSha("asha", "lens", "main", "ghs_2")).thenReturn("c0ffee");
+        reader.readSnapshot(repo);
+        verify(github).getTree("asha", "lens", "c0ffee", "ghs_2");
     }
 
     @Test
@@ -105,5 +106,31 @@ class GitHubRepositoryReaderTest {
         assertThatThrownBy(() -> reader.read(USER, "asha", "lens"))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("GITHUB_RATE_LIMITED"));
         verify(connections, never()).findById(any());
+    }
+
+    @Test
+    void publicFileSessionsCarryNoToken() {
+        GitHubRepositoryReader.FileSession session = reader.openFiles(USER, "asha", "lens", false);
+        session.read("c0ffee", "src/App.java");
+        verify(github).getRawFile("asha", "lens", "c0ffee", "src/App.java", null);
+        verify(app, never()).installationToken(any(Long.class));
+        assertThat(session.toString()).doesNotContain("ghs");
+    }
+
+    @Test
+    void privateFileSessionsUseTheInstallationWithoutExposingTheToken() {
+        connectInstallation(7);
+        when(app.installationToken(7)).thenReturn("ghs_secret");
+        GitHubRepositoryReader.FileSession session = reader.openFiles(USER, "asha", "lens", true);
+        session.read("c0ffee", "src/App.java");
+        verify(github).getRawFile("asha", "lens", "c0ffee", "src/App.java", "ghs_secret");
+        assertThat(session.toString()).doesNotContain("ghs_secret");
+    }
+
+    @Test
+    void privateFileSessionsNeedAConnection() {
+        when(connections.findById(USER)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> reader.openFiles(USER, "asha", "lens", true))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("REPOSITORY_NO_ACCESS"));
     }
 }

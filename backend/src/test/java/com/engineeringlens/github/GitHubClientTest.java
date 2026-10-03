@@ -131,4 +131,38 @@ class GitHubClientTest {
         assertThatThrownBy(() -> client.getTree("octocat", "Hello-World", "main", null))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("REPOSITORY_EMPTY"));
     }
+
+    @Test
+    void resolvesABranchToItsCommit() {
+        server.expect(requestTo(REPO_URL + "/commits/main"))
+                .andExpect(header("Accept", "application/vnd.github.sha"))
+                .andRespond(withSuccess("0123456789abcdef0123456789abcdef01234567\n", MediaType.TEXT_PLAIN));
+        assertThat(client.getCommitSha("octocat", "Hello-World", "main", null)).isEqualTo("0123456789abcdef0123456789abcdef01234567");
+    }
+
+    @Test
+    void publicFilesComeFromTheRawHostWithoutUsingTheApiLimit() {
+        server.expect(requestTo("https://raw.githubusercontent.com/octocat/Hello-World/c0ffee/src/my%20app/main.py"))
+                .andRespond(withSuccess("print('hi')", MediaType.TEXT_PLAIN));
+        assertThat(new String(client.getRawFile("octocat", "Hello-World", "c0ffee", "src/my app/main.py", null)))
+                .isEqualTo("print('hi')");
+    }
+
+    @Test
+    void privateFilesUseTheContentsApiWithTheToken() {
+        server.expect(requestTo(REPO_URL + "/contents/src/main.py?ref=c0ffee"))
+                .andExpect(header("Authorization", "Bearer ghs_token"))
+                .andExpect(header("Accept", "application/vnd.github.raw"))
+                .andRespond(withSuccess("print('private')", MediaType.TEXT_PLAIN));
+        assertThat(new String(client.getRawFile("octocat", "Hello-World", "c0ffee", "src/main.py", "ghs_token")))
+                .isEqualTo("print('private')");
+    }
+
+    @Test
+    void missingFileIsReportedAsSuch() {
+        server.expect(requestTo("https://raw.githubusercontent.com/octocat/Hello-World/c0ffee/gone.py"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> client.getRawFile("octocat", "Hello-World", "c0ffee", "gone.py", null))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("SOURCE_FILE_NOT_FOUND"));
+    }
 }

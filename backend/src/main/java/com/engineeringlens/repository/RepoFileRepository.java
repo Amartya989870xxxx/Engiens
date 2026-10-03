@@ -14,6 +14,9 @@ public interface RepoFileRepository extends JpaRepository<RepoFile, UUID> {
     @Query("delete from RepoFile f where f.repositoryId = :repositoryId")
     void deleteAllForRepository(UUID repositoryId);
 
+    /** The whole inventory in a stable order, so anything computed from it is reproducible. */
+    List<RepoFile> findByRepositoryIdOrderByPathAsc(UUID repositoryId);
+
     interface LabelCount {
         String getLabel();
 
