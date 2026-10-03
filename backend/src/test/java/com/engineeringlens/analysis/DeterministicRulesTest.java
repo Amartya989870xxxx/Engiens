@@ -294,4 +294,11 @@ class DeterministicRulesTest {
         DeterministicAnalyzer analyzer = new DeterministicAnalyzer();
         assertThat(analyzer.analyze(in)).isEqualTo(analyzer.analyze(in));
     }
+
+    @Test
+    void aPackageJsonDeclaringNothingNeedsNoLockfile() {
+        AnalysisInput in = input(Fixtures.inventory("package.json", "apps/web/package.json", "apps/web/yarn.lock"),
+                Map.of("package.json", "{\"name\":\"monorepo\",\"private\":true}"));
+        assertThat(run(ProductionReadinessRules.LOCKFILE, in)).isEmpty();
+    }
 }

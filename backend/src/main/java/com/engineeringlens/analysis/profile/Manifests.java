@@ -65,6 +65,7 @@ final class Manifests {
         } else if (name.equals("pyproject.toml")) {
             poetry = text.contains("[tool.poetry");
             pyproject(text, names);
+            count = names.size();
         } else if (name.equals("pipfile")) {
             count = tomlSections(text, names, Set.of("packages", "dev-packages"));
         } else if (name.equals("pom.xml")) {
@@ -147,7 +148,8 @@ final class Manifests {
                 while (m.find()) {
                     names.add(normalisePython(m.group(1)));
                 }
-                if (trimmed.contains("]")) {
+                // Only a bracket outside quotes ends the array: "fastapi[standard]" contains one inside.
+                if (trimmed.replaceAll("\"[^\"]*\"|'[^']*'", "").contains("]")) {
                     inArray = false;
                 }
             } else if (section.startsWith("tool.poetry") && section.endsWith("dependencies")) {

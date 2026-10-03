@@ -147,8 +147,12 @@ public final class ProductionReadinessRules {
             (rule, in) -> {
                 List<String> lockDirs = in.relevant().stream().map(InventoryFile::path)
                         .filter(p -> NPM_LOCKFILES.contains(RepoPaths.lowerName(p))).map(RepoPaths::parent).toList();
+                // A package.json that declares no dependencies (a workspace root, say) has nothing to lock.
+                java.util.Set<String> empty = new java.util.HashSet<>();
+                in.profile().manifests().stream().filter(m -> Integer.valueOf(0).equals(m.declaredDependencies()))
+                        .forEach(m -> empty.add(m.path()));
                 return in.relevant().stream().map(InventoryFile::path)
-                        .filter(p -> RepoPaths.lowerName(p).equals("package.json"))
+                        .filter(p -> RepoPaths.lowerName(p).equals("package.json") && !empty.contains(p))
                         .filter(p -> lockDirs.stream().noneMatch(dir -> covers(dir, RepoPaths.parent(p))))
                         .map(p -> Signal.of(rule, Severity.LOW, Confidence.HIGH,
                                 "No lockfile found for " + p + ", so installs can resolve different dependency versions over time.",

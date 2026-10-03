@@ -189,4 +189,26 @@ class RepositoryProfilerTest {
                 "docker-compose.yml", "config/application.yml", ".env.example");
         assertThat(RepositoryProfiler.filesToRead(inventory, 2, 200_000)).containsExactly("package.json", "backend/requirements.txt");
     }
+
+    @Test
+    void pyprojectExtrasDoNotEndTheDependencyList() {
+        RepositoryProfile p = profile(Fixtures.inventory("backend/pyproject.toml"), Map.of("backend/pyproject.toml", """
+                [project]
+                name = "app"
+                dependencies = [
+                    "fastapi[standard]>=0.141.1,<1.0.0",
+                    "alembic>=1.19.1,<2.0.0",
+                    "psycopg[binary]>=3.3.6,<4.0.0",
+                    "sqlmodel>=0.0.39,<1.0.0",
+                ]
+
+                [dependency-groups]
+                dev = ["pytest<10.0.0,>=7.4.3"]
+                """));
+        assertThat(names(p.frameworks())).containsExactly("FastAPI");
+        assertThat(names(p.persistence())).containsExactly("Alembic", "SQLModel");
+        assertThat(detection(p.persistence(), "Alembic").confidence()).isEqualTo(Confidence.HIGH);
+        assertThat(names(p.testing().frameworks())).containsExactly("pytest");
+        assertThat(p.manifests().get(0).declaredDependencies()).isEqualTo(5);
+    }
 }

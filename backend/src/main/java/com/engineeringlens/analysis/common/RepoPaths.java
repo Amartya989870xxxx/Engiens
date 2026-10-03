@@ -121,12 +121,18 @@ public final class RepoPaths {
         return dot > 0 && SECRET_EXTENSIONS.contains(name.substring(dot + 1));
     }
 
+    /** .env.example, .env.sample, .env.local.example, .env.example-e2e… any .env variant naming itself a template. */
     public static boolean isEnvTemplate(String path) {
         String name = lowerName(path);
-        if (!name.startsWith(".env.")) {
+        if (!name.startsWith(".env.") && !name.startsWith(".env-")) {
             return false;
         }
-        return ENV_TEMPLATE_SUFFIXES.contains(name.substring(name.lastIndexOf('.') + 1));
+        for (String part : name.substring(4).split("[.\\-_]")) {
+            if (ENV_TEMPLATE_SUFFIXES.contains(part)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---- build, deploy, config -----------------------------------------------------------------
@@ -224,12 +230,27 @@ public final class RepoPaths {
             "main\\.py|app\\.py|manage\\.py|wsgi\\.py|asgi\\.py|server\\.(js|ts|mjs)|app\\.(js|ts|mjs)|main\\.(ts|tsx|js|jsx|go|rs|kt)"
                     + "|program\\.cs|[a-z0-9]*application\\.(java|kt)");
 
+    /** Folders where a "main" or "server" file is a component, mock or tool config, not the app's entry point. */
+    private static final Set<String> NOT_ENTRYPOINT_FOLDERS = Set.of("components", "component", ".storybook", "testing", "mocks",
+            "__mocks__", "fixtures", "examples", "example", "docs", "stories", "e2e", "scripts");
+    private static final Set<String> JS_ENTRY_PARENTS = Set.of("", "src", "server", "app", "api", "backend");
+
     /** Conventional application entry points: main.py, manage.py, server.ts, main.go, *Application.java… */
     public static boolean isEntrypoint(String path, String language) {
         if (!isCode(language) || isTestFile(path, language)) {
             return false;
         }
+        if (folders(path).stream().anyMatch(NOT_ENTRYPOINT_FOLDERS::contains)) {
+            return false;
+        }
         String name = lowerName(path);
+        // JS/TS entry files sit at the root of an app or directly in src/ (frontend/src/main.tsx), not deep in a tree.
+        if (name.matches("(main|server|app|index)\\.(ts|tsx|js|jsx|mjs)")) {
+            String parentName = fileName(parent(path)).toLowerCase(Locale.ROOT);
+            if (!JS_ENTRY_PARENTS.contains(parentName)) {
+                return false;
+            }
+        }
         if (ENTRYPOINT_NAME.matcher(name).matches()) {
             // "SomethingApplication.java" must be the Spring-style main class, not e.g. "LoanApplication" in a model package.
             return !name.endsWith("application.java") && !name.endsWith("application.kt")

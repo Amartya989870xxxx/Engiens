@@ -12,6 +12,8 @@ public enum FileRole {
     TEST("automated test file"),
     TEST_CONFIG("test configuration"),
     CONFIG("configuration file"),
+    DATABASE_CONFIG("database configuration"),
+    TOOLING_CONFIG("build/lint tooling configuration"),
     ENV_TEMPLATE("environment variable template"),
     BUILD_MANIFEST("dependency/build manifest"),
     CONTAINER("container definition"),

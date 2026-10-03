@@ -21,6 +21,14 @@ final class FileRoles {
     private static final Set<String> SCHEMA_FOLDERS = Set.of("schemas", "schema", "dto", "dtos");
     private static final Set<String> SECURITY_WORDS = Set.of("auth", "oauth", "jwt", "security", "permission", "permissions",
             "login", "password", "csrf", "cors");
+    private static final java.util.regex.Pattern TOOLING_CONFIG = java.util.regex.Pattern.compile(
+            "tsconfig(\\.[\\w-]+)?\\.json|\\.eslintrc(\\.\\w+)?|eslint\\.config\\.\\w+|\\.prettierrc(\\.\\w+)?|babel\\.config\\.\\w+"
+                    + "|(vite|tailwind|postcss|webpack|rollup|next|nuxt|svelte|astro|turbo|biome)\\.config\\.(js|ts|mjs|cjs|json)");
+    private static final Set<String> DATABASE_WORDS = Set.of("db", "database", "datasource", "prisma", "alembic", "orm",
+            "typeorm", "sequelize", "knex", "mongo", "mongoose", "redis", "sqlalchemy");
+    private static final Set<String> SERVED_ASSET_FOLDERS = Set.of("public", "static", "wwwroot");
+    private static final Set<String> TEST_SUPPORT_FOLDERS = Set.of("mocks", "__mocks__", "testing", "fixtures", "test-utils",
+            "test_utils", "testutils");
     private static final Set<String> UTILITY_FOLDERS = Set.of("utils", "util", "helpers", "helper", "lib", "common", "shared");
 
     static Set<FileRole> of(InventoryFile f) {
@@ -33,6 +41,13 @@ final class FileRoles {
 
         if (RepoPaths.isTestFile(path, f.language())) {
             roles.add(FileRole.TEST); // a test of a service is a test, not a service
+            return roles;
+        }
+        if (folders.stream().anyMatch(SERVED_ASSET_FOLDERS::contains)) {
+            return roles; // public/ and static/ hold files served as-is (often generated), not application code
+        }
+        if (folders.stream().anyMatch(TEST_SUPPORT_FOLDERS::contains)) {
+            roles.add(FileRole.TEST_CONFIG); // a mock database is test infrastructure, not persistence code
             return roles;
         }
         if (name.matches("conftest\\.py|pytest\\.ini|tox\\.ini|setuptests\\.(ts|js)|(jest|vitest|playwright|cypress|karma)\\.conf(ig)?\\.(js|ts|mjs|cjs|json)")) {
@@ -64,8 +79,14 @@ final class FileRoles {
         }
         if (RepoPaths.isEnvTemplate(path)) {
             roles.add(FileRole.ENV_TEMPLATE);
+        } else if (TOOLING_CONFIG.matcher(name).matches()) {
+            roles.add(FileRole.TOOLING_CONFIG); // how code is built and linted, not how the app runs
         } else if (RepoPaths.isConfigFile(path) && !roles.contains(FileRole.TEST_CONFIG)) {
             roles.add(FileRole.CONFIG);
+        }
+        if (name.matches("application(-[\\w-]+)?\\.(properties|ya?ml)|settings\\.py|schema\\.prisma|alembic\\.ini|ormconfig\\.\\w+|knexfile\\.\\w+")
+                || words.stream().anyMatch(DATABASE_WORDS::contains) && (code || RepoPaths.isConfigFile(path))) {
+            roles.add(FileRole.DATABASE_CONFIG);
         }
         if (RepoPaths.isManifest(path)) {
             roles.add(FileRole.BUILD_MANIFEST);

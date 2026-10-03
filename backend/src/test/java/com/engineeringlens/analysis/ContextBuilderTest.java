@@ -288,4 +288,36 @@ class ContextBuilderTest {
         DeterministicAnalysis analysis = new DeterministicAnalyzer().analyze(new AnalysisInput(SERVICE, profile, SourceTexts.of(ruleTexts)));
         return builder.assemble(profile, analysis, sel, contents, developer, "c0ffee", true, LIMITS);
     }
+
+    @Test
+    void toolingConfigIsNotPersistenceOrProductionEvidence() {
+        List<InventoryFile> frontend = Fixtures.inventory("package.json", "tsconfig.app.json", ".eslintrc.cjs",
+                "tailwind.config.cjs", "vite.config.ts", "src/main.tsx", "src/api/client.ts", "src/features/users/api.ts",
+                ".github/workflows/ci.yml");
+        ContextSelector.Selection sel = selector.select(frontend, LIMITS);
+
+        assertThat(picked(sel, ReviewDimension.PERSISTENCE)).isEmpty();
+        assertThat(picked(sel, ReviewDimension.PRODUCTION_READINESS))
+                .doesNotContain("tsconfig.app.json", ".eslintrc.cjs", "tailwind.config.cjs", "vite.config.ts")
+                .contains(".github/workflows/ci.yml", "package.json");
+        assertThat(picked(sel, ReviewDimension.CODE_QUALITY)).contains(".eslintrc.cjs");
+    }
+
+    @Test
+    void databaseConfigIsPersistenceEvidence() {
+        ContextSelector.Selection sel = selector.select(Fixtures.inventory("src/main/resources/application.yml",
+                "app/core/db.py", "prisma/schema.prisma", "vite.config.ts"), LIMITS);
+        assertThat(picked(sel, ReviewDimension.PERSISTENCE))
+                .contains("src/main/resources/application.yml", "app/core/db.py", "prisma/schema.prisma")
+                .doesNotContain("vite.config.ts");
+    }
+
+    @Test
+    void mocksAndServedAssetsAreNotApplicationCode() {
+        ContextSelector.Selection sel = selector.select(Fixtures.inventory("src/testing/mocks/db.ts",
+                "public/mockServiceWorker.js", "src/features/users/api.ts", "src/main.tsx"), LIMITS);
+        assertThat(picked(sel, ReviewDimension.PERSISTENCE)).isEmpty();
+        assertThat(picked(sel, ReviewDimension.TESTING)).contains("src/testing/mocks/db.ts");
+        assertThat(sel.files()).extracting(c -> c.file().path()).doesNotContain("public/mockServiceWorker.js");
+    }
 }
