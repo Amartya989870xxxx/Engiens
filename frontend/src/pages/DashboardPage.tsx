@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, type Profile } from '../api'
+import { api, ApiError, type Profile } from '../api'
+import { useImportRepository } from '../repositories/useImportRepository'
 import { describeLevel } from '../profile/options'
 import { useYourRepos } from '../dashboard/useYourRepos'
 import { ArrowUpIcon, FlaskIcon, RepoIcon, UserIcon } from '../shell/icons'
@@ -11,24 +12,20 @@ export function DashboardPage() {
   const profile = useQuery({ queryKey: ['profile'], queryFn: () => api<Profile>('/api/profile') })
   const { repos, loading, hasGitHub } = useYourRepos(profile.data)
   const [url, setUrl] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
+  const importRepo = useImportRepository()
   const inputRef = useRef<HTMLInputElement>(null)
   const location = useLocation()
 
   // Focus on arrival, and again whenever "New review" is clicked (each click is a new location.key).
   useEffect(() => inputRef.current?.focus(), [location.key])
 
-  function pick(htmlUrl: string) {
-    setUrl(htmlUrl)
-    setNotice(null)
-    inputRef.current?.focus()
-  }
+  // Which link is being imported right now (a row's URL or the typed one), if any.
+  const importing = importRepo.isPending ? importRepo.variables : null
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    if (!url.trim()) return
-    // Repository import is the next feature in the build plan; say so instead of pretending.
-    setNotice('Repository analysis is the next feature being built. Once it’s ready, this will start your review.')
+    if (!url.trim() || importing) return
+    importRepo.mutate(url.trim())
   }
 
   return (
@@ -54,15 +51,15 @@ export function DashboardPage() {
               value={url}
               onChange={(e) => {
                 setUrl(e.target.value)
-                setNotice(null)
+                importRepo.reset()
               }}
               placeholder="Paste a GitHub repository link"
               className="min-w-0 flex-1 bg-transparent py-2 text-[15px] text-ink placeholder:text-muted focus:outline-none"
             />
             <button
               type="submit"
-              disabled={!url.trim()}
-              aria-label="Start review"
+              disabled={!url.trim() || importing !== null}
+              aria-label={importing === url.trim() && importing ? 'Importing repository' : 'Import repository'}
               className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-black transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-30"
             >
               <ArrowUpIcon />
@@ -70,9 +67,14 @@ export function DashboardPage() {
           </div>
         </form>
 
-        {notice && (
+        {importing && importing === url.trim() && (
           <p role="status" className="mt-3 px-5 text-sm text-muted animate-fade-in motion-reduce:animate-none">
-            {notice}
+            Importing repository…
+          </p>
+        )}
+        {importRepo.error && (
+          <p role="alert" className="mt-3 px-5 text-sm text-danger animate-fade-in motion-reduce:animate-none">
+            {importRepo.error instanceof ApiError ? importRepo.error.message : 'Something went wrong. Please try again.'}
           </p>
         )}
         <ErrorBanner error={profile.error} />
@@ -80,8 +82,15 @@ export function DashboardPage() {
 
         <ul className="mt-8 space-y-1">
           {repos?.map((r) => (
-            <Suggestion key={r.htmlUrl} icon={<RepoIcon />} onClick={() => pick(r.htmlUrl)} meta={r.privateRepo ? 'Private' : (r.language ?? undefined)}>
-              Review <span className="text-ink">{r.name}</span>
+            <Suggestion
+              key={r.htmlUrl}
+              icon={<RepoIcon />}
+              onClick={() => importRepo.mutate(r.htmlUrl)}
+              disabled={importing !== null}
+              meta={r.privateRepo ? 'Private' : (r.language ?? undefined)}
+            >
+              {importing === r.htmlUrl ? 'Importing' : 'Review'} <span className="text-ink">{r.name}</span>
+              {importing === r.htmlUrl && '…'}
             </Suggestion>
           ))}
           {loading && <li className="px-4 py-2.5 text-sm text-muted">Loading your repositories…</li>}
@@ -124,9 +133,11 @@ type SuggestionProps = {
   onClick?: () => void
   to?: string
   soon?: boolean
+  /** While one import runs, the other rows can't start a second one. */
+  disabled?: boolean
 }
 
-function Suggestion({ icon, children, meta, onClick, to, soon }: SuggestionProps) {
+function Suggestion({ icon, children, meta, onClick, to, soon, disabled }: SuggestionProps) {
   const body = (
     <>
       <span className="text-muted">{icon}</span>
@@ -136,7 +147,7 @@ function Suggestion({ icon, children, meta, onClick, to, soon }: SuggestionProps
     </>
   )
   const base = 'flex w-full items-center gap-4 rounded-lg px-4 py-2.5 text-left text-[15px]'
-  const interactive = `${base} text-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-white`
+  const interactive = `${base} text-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted`
   return (
     <li>
       {soon ? (
@@ -148,7 +159,7 @@ function Suggestion({ icon, children, meta, onClick, to, soon }: SuggestionProps
           {body}
         </Link>
       ) : (
-        <button type="button" onClick={onClick} className={interactive}>
+        <button type="button" onClick={onClick} disabled={disabled} className={interactive}>
           {body}
         </button>
       )}

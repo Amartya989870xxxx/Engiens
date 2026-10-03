@@ -66,7 +66,8 @@ Modular monolith (`backend/src/main/java/com/engineeringlens`):
 |----------|-------------------------------------------------------|
 | `auth`   | registration, login, JWT issuing, security config      |
 | `user`   | users and engineering profiles                         |
-| `github` | public GitHub API client (profile link → projects)     |
+| `github` | GitHub API clients, GitHub App connection, repository reader |
+| `repository` | repository import: metadata + file inventory (`/api/repositories`) |
 | `common` | shared error model and global exception handler        |
 
 Controllers stay thin, business rules live in services, DTOs are used at the API boundary, and every failure returns the same `ApiError` JSON shape. Schema changes go through Flyway migrations in `src/main/resources/db/migration`.

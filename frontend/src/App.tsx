@@ -8,6 +8,7 @@ import { LandingPage } from './pages/LandingPage'
 import { AppShell } from './shell/AppShell'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { RepositoryPage } from './pages/RepositoryPage'
 
 const queryClient = new QueryClient()
 
@@ -31,6 +32,7 @@ export default function App() {
                 <Route element={<AppShell />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/repositories/:id" element={<RepositoryPage />} />
                 </Route>
               </Route>
             </Route>

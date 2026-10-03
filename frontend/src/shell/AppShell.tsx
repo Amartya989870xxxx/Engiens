@@ -2,7 +2,7 @@ import { Logo } from './Logo'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, type Profile } from '../api'
+import { api, getRepositories, type Profile } from '../api'
 import { useAuth } from '../auth'
 import { describeLevel } from '../profile/options'
 import { ChartIcon, CloseIcon, ComposeIcon, FlaskIcon, LogOutIcon, MenuIcon, UserIcon } from './icons'
@@ -75,6 +75,8 @@ function Sidebar({ onClose }: { onClose: () => void }) {
         <SoonItem icon={<ChartIcon />} label="Progress" />
       </nav>
 
+      <RecentRepositories />
+
       <section className="mt-8 px-5" aria-labelledby="recent-reviews">
         <h2 id="recent-reviews" className="mb-2 text-xs font-medium text-muted">
           Recent reviews
@@ -86,6 +88,41 @@ function Sidebar({ onClose }: { onClose: () => void }) {
         <AccountMenu />
       </div>
     </>
+  )
+}
+
+const RECENT_LIMIT = 5
+
+/**
+ * Imported repositories, newest first. Kept separate from "Recent reviews": an imported
+ * repository hasn't been reviewed yet, and the sidebar shouldn't say it has.
+ */
+function RecentRepositories() {
+  const repos = useQuery({ queryKey: ['repositories'], queryFn: getRepositories })
+  if (!repos.data?.length) return null
+  return (
+    <section className="mt-8 px-3" aria-labelledby="recent-repositories">
+      <h2 id="recent-repositories" className="mb-1 px-2 text-xs font-medium text-muted">
+        Recent repositories
+      </h2>
+      <ul className="space-y-0.5">
+        {repos.data.slice(0, RECENT_LIMIT).map((r) => (
+          <li key={r.id}>
+            <NavLink
+              to={`/repositories/${r.id}`}
+              className={({ isActive }) =>
+                `flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-raised hover:text-ink ${
+                  isActive ? 'bg-raised text-ink' : 'text-muted'
+                }`
+              }
+            >
+              <span className="truncate">{r.name}</span>
+              {r.status === 'FAILED' && <span className="shrink-0 text-[11px] text-danger">Failed</span>}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

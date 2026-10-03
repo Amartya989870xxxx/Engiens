@@ -156,7 +156,7 @@ public class GitHubAppClient {
             }
             return result;
         } catch (ResourceAccessException e) {
-            throw GitHubHttp.unavailable();
+            throw GitHubHttp.networkFailure(e);
         }
     }
 

@@ -96,3 +96,38 @@ export type GitHubRepo = {
 export type GitHubProjects = { username: string; projects: GitHubRepo[] }
 
 export type GitHubConnection = { available: boolean; connected: boolean; login: string | null; manageUrl: string | null }
+
+export type RepositoryStatus = 'IMPORTING' | 'READY' | 'FAILED'
+export type LabelCount = { label: string; count: number }
+
+/** An imported repository, as our API describes it (never GitHub's raw format). */
+export type ImportedRepository = {
+  id: string
+  owner: string
+  name: string
+  url: string
+  description: string | null
+  defaultBranch: string
+  primaryLanguage: string | null
+  visibility: 'PUBLIC' | 'PRIVATE'
+  stars: number
+  forks: number
+  fileCount: number
+  relevantFileCount: number
+  ignoredFileCount: number
+  status: RepositoryStatus
+  failureReason: string | null
+  updatedAt: string
+  languages: LabelCount[]
+  ignoredReasons: LabelCount[]
+}
+
+export type RepositoryListItem = { id: string; owner: string; name: string; status: RepositoryStatus; updatedAt: string }
+
+/** Imports a repository by its GitHub link; returns the existing record if it was already imported. */
+export const importRepository = (url: string) =>
+  api<ImportedRepository>('/api/repositories/import', { method: 'POST', body: { url } })
+
+export const getRepository = (id: string) => api<ImportedRepository>(`/api/repositories/${encodeURIComponent(id)}`)
+
+export const getRepositories = () => api<RepositoryListItem[]>('/api/repositories')

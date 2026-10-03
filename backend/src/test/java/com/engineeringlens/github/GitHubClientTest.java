@@ -2,9 +2,13 @@ package com.engineeringlens.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+
+import java.net.SocketTimeoutException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,5 +68,67 @@ class GitHubClientTest {
         server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
         assertThatThrownBy(() -> client.listPublicRepos("octo"))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("GITHUB_UNAVAILABLE"));
+    }
+
+    private static final String REPO_URL = "https://api.github.com/repos/octocat/Hello-World";
+
+    @Test
+    void mapsRepositoryMetadata() {
+        server.expect(requestTo(REPO_URL)).andRespond(withSuccess("""
+                {"name":"Hello-World","owner":{"login":"octocat"},"description":"My first repo","default_branch":"main",
+                 "language":"Java","private":false,"stargazers_count":12,"forks_count":3,
+                 "html_url":"https://github.com/octocat/Hello-World","size":108}""", MediaType.APPLICATION_JSON));
+
+        GitHubRepoDetails d = client.getRepository("octocat", "Hello-World", null);
+
+        assertThat(d.owner().login()).isEqualTo("octocat");
+        assertThat(d.defaultBranch()).isEqualTo("main");
+        assertThat(d.stars()).isEqualTo(12);
+        assertThat(d.forks()).isEqualTo(3);
+        assertThat(d.privateRepo()).isFalse();
+    }
+
+    @Test
+    void sendsInstallationTokenAndReadsTree() {
+        server.expect(requestTo(REPO_URL + "/git/trees/main?recursive=1"))
+                .andExpect(header("Authorization", "Bearer ghs_token"))
+                .andRespond(withSuccess("""
+                        {"sha":"abc","truncated":false,"tree":[
+                          {"path":"src","type":"tree"},{"path":"src/App.java","type":"blob","size":2400}]}""",
+                        MediaType.APPLICATION_JSON));
+
+        GitHubTree tree = client.getTree("octocat", "Hello-World", "main", "ghs_token");
+
+        assertThat(tree.truncated()).isFalse();
+        assertThat(tree.tree()).extracting(GitHubTree.Entry::path).containsExactly("src", "src/App.java");
+    }
+
+    @Test
+    void missingRepositoryIsNotFound() {
+        server.expect(requestTo(REPO_URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> client.getRepository("octocat", "Hello-World", null))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("REPOSITORY_NOT_FOUND"));
+    }
+
+    @Test
+    void repositoryRateLimitIsReported() {
+        server.expect(requestTo(REPO_URL)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        assertThatThrownBy(() -> client.getRepository("octocat", "Hello-World", null))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("GITHUB_RATE_LIMITED"));
+    }
+
+    @Test
+    void slowGitHubIsATimeout() {
+        server.expect(requestTo(REPO_URL)).andRespond(withException(new SocketTimeoutException("Read timed out")));
+        assertThatThrownBy(() -> client.getRepository("octocat", "Hello-World", null))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("GITHUB_TIMEOUT"));
+    }
+
+    @Test
+    void emptyRepositoryIsReported() {
+        // GitHub answers 409 Conflict when a repository has no commits.
+        server.expect(requestTo(REPO_URL + "/git/trees/main?recursive=1")).andRespond(withStatus(HttpStatus.CONFLICT));
+        assertThatThrownBy(() -> client.getTree("octocat", "Hello-World", "main", null))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getCode()).isEqualTo("REPOSITORY_EMPTY"));
     }
 }
