@@ -14,7 +14,7 @@ A developer-learning platform: build an engineering profile, get a personalized 
 Requirements: JDK 21+, Node 22+, Docker.
 
 ```bash
-cp .env.example .env            # then edit DB_PASSWORD and JWT_SECRET
+cp .env.example .env            # then edit DB_PASSWORD and JWT_SECRET (and GEMINI_API_KEY for AI reviews)
 docker compose up -d            # PostgreSQL
 
 cd backend && ./mvnw spring-boot:run          # API on :8080
@@ -69,6 +69,8 @@ Modular monolith (`backend/src/main/java/com/engineeringlens`):
 | `github` | GitHub API clients, GitHub App connection, repository reader |
 | `repository` | repository import: metadata + file inventory (`/api/repositories`) |
 | `analysis` | review preparation without AI: profiler, deterministic rules, context builder (`/api/repositories/{id}/analyses`) |
+| `analysis.ai` | provider-neutral AI layer: Gemini and Groq providers, model router with retries, fallback and per-model cooldowns |
+| `analysis.review` | AI engineering review: rubric, prompt, output validation, background runs, persistence (`/api/repositories/{id}/reviews`, `/api/reviews`) |
 | `common` | shared error model and global exception handler        |
 
 Controllers stay thin, business rules live in services, DTOs are used at the API boundary, and every failure returns the same `ApiError` JSON shape. Schema changes go through Flyway migrations in `src/main/resources/db/migration`.
