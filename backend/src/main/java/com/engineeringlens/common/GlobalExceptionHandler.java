@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -59,6 +60,13 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> handleMethod(HttpRequestMethodNotSupportedException ex) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
                 .body(ApiError.of(405, "METHOD_NOT_ALLOWED", "This address doesn't support " + ex.getMethod() + " requests."));
+    }
+
+    /** Two requests changed the same record at once (optimistic locking): the later one must re-read and retry. */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ResponseEntity<ApiError> handleConcurrentUpdate(OptimisticLockingFailureException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(409, "CONCURRENT_UPDATE", "This was changed somewhere else at the same time. Refresh and try again."));
     }
 
     @ExceptionHandler(Exception.class)

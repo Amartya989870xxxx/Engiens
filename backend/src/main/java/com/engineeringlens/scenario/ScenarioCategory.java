@@ -1,0 +1,25 @@
+package com.engineeringlens.scenario;
+
+/** The kind of engineering problem. Which ones appear depends on what the repository actually contains. */
+public enum ScenarioCategory {
+    PRODUCTION_BUG,
+    CORRECTNESS_BUG,
+    API_RELIABILITY,
+    ERROR_HANDLING,
+    DATABASE_CORRECTNESS,
+    DATABASE_PERFORMANCE,
+    CONCURRENCY_CONSISTENCY,
+    CACHING,
+    SCALABILITY,
+    ARCHITECTURE_REFACTORING,
+    SECURITY,
+    TESTING_GAP,
+    PRODUCTION_READINESS,
+    DEPENDENCY_FAILURE,
+    OBSERVABILITY_OPERATIONS,
+    FRONTEND_CLIENT,
+    INFRASTRUCTURE_DEPLOYMENT,
+    CLOUD_ARCHITECTURE,
+    NETWORK_BEHAVIOR,
+    AI_ML_ENGINEERING
+}
