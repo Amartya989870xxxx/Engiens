@@ -55,7 +55,7 @@ class ScenarioLabLifecycleTest extends ScenarioFlowSupport {
 
         mvc.perform(get("/api/scenario-labs/" + labId).header("Authorization", auth))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("GENERATING"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.repositoryId").value(repoId))
                 .andExpect(jsonPath("$.repositoryName").value("orders"))
                 .andExpect(jsonPath("$.reviewId").value(reviewId))
@@ -64,8 +64,8 @@ class ScenarioLabLifecycleTest extends ScenarioFlowSupport {
                 .andExpect(jsonPath("$.roles[1]").value("CLOUD_ENGINEER"))
                 .andExpect(jsonPath("$.seniority").value("SDE2"))
                 .andExpect(jsonPath("$.scenarioCount").value(5))
-                .andExpect(jsonPath("$.scenariosReady").value(0))
-                .andExpect(jsonPath("$.scenarios.length()").value(0));
+                .andExpect(jsonPath("$.scenariosReady").value(5))
+                .andExpect(jsonPath("$.scenarios.length()").value(5));
 
         ScenarioLab lab = labs.findById(UUID.fromString(labId)).orElseThrow();
         assertThat(lab.getAnalysisRunId()).isEqualTo(review.getAnalysisRunId()); // the context the review assessed
@@ -145,7 +145,7 @@ class ScenarioLabLifecycleTest extends ScenarioFlowSupport {
         String repoId = importRepo(auth, "asha", "orders");
         ScenarioLab lab = labs.findById(UUID.fromString(createdId(create(auth, "\"repositoryId\":\"" + repoId + "\"",
                 "[\"BACKEND_ENGINEER\"]", "\"SDE1\"", 5)))).orElseThrow();
-        Scenario scenario = scenarios.saveAndFlush(new Scenario(lab.getId(), 1, ScenarioRole.BACKEND_ENGINEER, Seniority.SDE1,
+        Scenario scenario = scenarios.saveAndFlush(new Scenario(lab.getId(), 99, ScenarioRole.BACKEND_ENGINEER, Seniority.SDE1,
                 ScenarioCategory.ARCHITECTURE_REFACTORING, ScenarioDifficulty.INTERMEDIATE, ExecutionCapability.APPROACH_ONLY, null,
                 "Split the order service", "{}", null, null, "{}", null));
 
@@ -206,7 +206,7 @@ class ScenarioLabLifecycleTest extends ScenarioFlowSupport {
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("REPOSITORY_NOT_FOUND"));
 
         // The owner's lab is untouched.
-        mvc.perform(get("/api/scenario-labs/" + labId).header("Authorization", asha)).andExpect(jsonPath("$.status").value("GENERATING"));
+        mvc.perform(get("/api/scenario-labs/" + labId).header("Authorization", asha)).andExpect(jsonPath("$.status").value("ACTIVE"));
         mvc.perform(get("/api/scenario-labs/active")).andExpect(status().isUnauthorized());
     }
 }

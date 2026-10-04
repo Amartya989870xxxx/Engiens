@@ -6,12 +6,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,7 @@ import com.engineeringlens.scenario.ScenarioLabRepository;
 import com.engineeringlens.scenario.ScenarioLabStatus;
 import com.engineeringlens.scenario.ScenarioRepository;
 import com.engineeringlens.scenario.ScenarioRole;
+import com.engineeringlens.scenario.generation.ScenarioGenerationWorker;
 
 /**
  * The lab lifecycle: create (from a review, a repository or a GitHub link), read, find the open lab, cancel.
@@ -52,10 +56,12 @@ public class ScenarioLabService {
     private final ReviewRunRepository reviewRuns;
     private final RepositoryImportService importer;
     private final AnalysisPreparationService preparation;
+    private final ScenarioGenerationWorker generation;
+    private final Executor executor;
 
     public ScenarioLabService(ScenarioLabRepository labs, ScenarioRepository scenarios, ScenarioAttemptRepository attempts,
             ImportedRepoRepository repositories, ReviewRunRepository reviewRuns, RepositoryImportService importer,
-            AnalysisPreparationService preparation) {
+            AnalysisPreparationService preparation, ScenarioGenerationWorker generation, @Qualifier("scenarioExecutor") Executor executor) {
         this.labs = labs;
         this.scenarios = scenarios;
         this.attempts = attempts;
@@ -63,6 +69,8 @@ public class ScenarioLabService {
         this.reviewRuns = reviewRuns;
         this.importer = importer;
         this.preparation = preparation;
+        this.generation = generation;
+        this.executor = executor;
     }
 
     /** Where a lab's snapshot comes from: the repository, the prepared analysis, its commit and the review (if any). */
@@ -98,7 +106,14 @@ public class ScenarioLabService {
         }
         log.info("Scenario lab created: lab={} repository={} review={} commit={} roles={} seniority={} count={}", lab.getId(),
                 lab.getRepositoryId(), lab.getReviewId(), lab.getCommitSha(), lab.getRoles(), lab.getSeniority(), lab.getScenarioCount());
-        return toResponse(lab, source.repository());
+        UUID labId = lab.getId();
+        try {
+            executor.execute(() -> generation.execute(labId));
+        } catch (TaskRejectedException e) {
+            lab.fail("BUSY", "Engiens is generating many labs right now. Please try again in a few minutes.");
+            labs.save(lab);
+        }
+        return toResponse(labs.findById(labId).orElse(lab), source.repository());
     }
 
     public ScenarioLabResponse get(UUID userId, UUID labId) {

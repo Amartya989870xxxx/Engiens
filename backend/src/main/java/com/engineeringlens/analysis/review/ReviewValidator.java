@@ -233,7 +233,7 @@ public class ReviewValidator {
     }
 
     /** Models sometimes wrap JSON in ``` fences despite instructions; unwrap them rather than fail. */
-    static String stripFences(String raw) {
+    public static String stripFences(String raw) {
         String s = raw == null ? "" : raw.strip();
         if (s.startsWith("```")) {
             int firstNewline = s.indexOf('\n');

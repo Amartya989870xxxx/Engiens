@@ -243,7 +243,7 @@ public class ReviewPromptBuilder {
         return u.toString();
     }
 
-    static String numbered(String text) {
+    public static String numbered(String text) {
         String[] lines = text.split("\n", -1);
         int count = text.endsWith("\n") ? lines.length - 1 : lines.length;
         int width = String.valueOf(Math.max(count, 1)).length();

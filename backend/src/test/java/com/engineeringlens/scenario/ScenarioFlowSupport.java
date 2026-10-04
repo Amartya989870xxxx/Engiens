@@ -41,6 +41,7 @@ import com.engineeringlens.github.GitHubRepositoryReader;
 import com.engineeringlens.github.GitHubRepositoryReader.RemoteRepository;
 import com.engineeringlens.github.GitHubRepositoryReader.RepositorySnapshot;
 import com.engineeringlens.github.GitHubTree;
+import com.engineeringlens.scenario.execution.ExecutionProvider;
 import com.jayway.jsonpath.JsonPath;
 
 /**
@@ -73,14 +74,18 @@ public abstract class ScenarioFlowSupport {
     @MockitoSpyBean
     protected GeminiProvider gemini;
 
+    /** The code sandbox, faked: see {@link ScenarioFixtures#judge}. Real containers are tested in SandboxExecutionTest. */
+    @MockitoBean
+    protected ExecutionProvider sandbox;
+
     @Autowired
     protected AiModelHealthRepository health;
 
     /** Every prompt the "model" received. */
     protected final List<AiPrompt> prompts = new ArrayList<>();
 
-    /** What the "model" answers; by default a valid review (assessment and teaching steps). */
-    protected Function<AiPrompt, String> answers = ScenarioFlowSupport::reviewAnswer;
+    /** What the "model" answers; by default valid reviews, scenario plans and scenarios. */
+    protected Function<AiPrompt, String> answers = ScenarioFlowSupport::defaultAnswer;
 
     @BeforeEach
     void fakeTheModel() {
@@ -91,6 +96,18 @@ public abstract class ScenarioFlowSupport {
             prompts.add(prompt);
             return new AiReply(answers.apply(prompt), 1000, 1000);
         }).when(gemini).generate(anyString(), any(), any());
+        when(sandbox.available()).thenReturn(true);
+        when(sandbox.execute(any())).thenAnswer(inv -> ScenarioFixtures.judge(inv.getArgument(0)));
+    }
+
+    protected static String defaultAnswer(AiPrompt prompt) {
+        if (ScenarioFixtures.isPlan(prompt)) {
+            return ScenarioFixtures.plan(prompt);
+        }
+        if (ScenarioFixtures.isBuild(prompt)) {
+            return ScenarioFixtures.scenario(prompt, ScenarioFixtures.STARTER);
+        }
+        return reviewAnswer(prompt);
     }
 
     protected static String reviewAnswer(AiPrompt prompt) {
