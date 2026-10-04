@@ -88,6 +88,16 @@ class PdfExportTest extends ScenarioFlowSupport {
         mvc.perform(get("/api/reviews/" + reviewId + "/pdf")).andExpect(status().isUnauthorized());
     }
 
+    /** Found in the browser: without this header the UI couldn't read the file name across origins. */
+    @Test
+    void theFrontendCanReadTheFileNameAcrossOrigins() throws Exception {
+        String auth = register("pdf-cors@example.com");
+        String reviewId = review(auth, importRepo(auth, "asha", "orders"));
+        mvc.perform(get("/api/reviews/" + reviewId + "/pdf").header("Authorization", auth).header("Origin", "http://localhost:5173"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Expose-Headers", org.hamcrest.Matchers.containsString("Content-Disposition")));
+    }
+
     @Test
     void anOpenLabHasNoAssessmentToExport() throws Exception {
         String auth = register("pdf-open@example.com");

@@ -93,6 +93,9 @@ public class SecurityConfig {
         cfg.setAllowedOrigins(List.of(origin));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // Browsers hide non-standard response headers from cross-origin scripts unless they're exposed: the
+        // frontend reads the PDF's file name from Content-Disposition.
+        cfg.setExposedHeaders(List.of("Content-Disposition"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", cfg);
         return source;
