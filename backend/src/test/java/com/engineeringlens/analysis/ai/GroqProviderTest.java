@@ -81,6 +81,16 @@ class GroqProviderTest {
         assertThat(failure(HttpStatus.PAYLOAD_TOO_LARGE, "{}", new HttpHeaders()).type()).isEqualTo(AiFailureType.CONTEXT_TOO_LARGE);
     }
 
+    /** One model's smaller output limit must skip that model, not stop routing for every model. */
+    @Test
+    void aModelSpecificOutputLimitSkipsThatModelInsteadOfRejectingTheRequest() {
+        assertThat(failure(HttpStatus.BAD_REQUEST, """
+                {"error":{"message":"`max_completion_tokens` must be less than or equal to `16384`, the maximum value for `max_completion_tokens` is less than the `context_window` for this model","type":"invalid_request_error"}}""",
+                new HttpHeaders()).type()).isEqualTo(AiFailureType.CONTEXT_TOO_LARGE);
+        assertThat(failure(HttpStatus.BAD_REQUEST, "{\"error\":{\"message\":\"messages must not be empty\"}}", new HttpHeaders()).type())
+                .isEqualTo(AiFailureType.REQUEST_INVALID); // a genuinely bad request still stops routing
+    }
+
     @Test
     void credentialsAndModelProblemsAreConfigurationErrors() {
         assertThat(failure(HttpStatus.UNAUTHORIZED, "{\"error\":{\"message\":\"Invalid API Key\",\"code\":\"invalid_api_key\"}}",

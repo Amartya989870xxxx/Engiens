@@ -124,6 +124,10 @@ public class GroqProvider implements AiProvider {
             type = AiFailureType.MODEL_NOT_FOUND;
         } else if (s == 413 || lower.contains("request too large") || lower.contains("reduce your message size")) {
             type = AiFailureType.CONTEXT_TOO_LARGE; // waiting won't make a too-large request fit
+        } else if (s == 400 && (lower.contains("max_completion_tokens") || lower.contains("context_window"))) {
+            // A limit of this particular model (e.g. a smaller output allowance), not a malformed request:
+            // this model can't take the request, others can. Found in real use with qwen3.8-27b (16,384 max).
+            type = AiFailureType.CONTEXT_TOO_LARGE;
         } else if (s == 429) {
             type = lower.contains("quota") || lower.contains("per day") ? AiFailureType.QUOTA_EXCEEDED : AiFailureType.RATE_LIMITED;
         } else if (s == 400 && code.equals("json_validate_failed")) {
