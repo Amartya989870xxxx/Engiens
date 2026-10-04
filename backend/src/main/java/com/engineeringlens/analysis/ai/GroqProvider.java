@@ -113,7 +113,7 @@ public class GroqProvider implements AiProvider {
             // classify by status alone
         }
         String safe = ProviderHttp.sanitize("HTTP " + status.value() + (code.isEmpty() ? "" : " " + code)
-                + (message.isEmpty() ? "" : ": " + message));
+                + (message.isEmpty() ? "" : ": " + message), config.apiKey());
         String lower = message.toLowerCase(Locale.ROOT);
         Duration retryAfter = ProviderHttp.parseDelay(retryAfterHeader);
         int s = status.value();

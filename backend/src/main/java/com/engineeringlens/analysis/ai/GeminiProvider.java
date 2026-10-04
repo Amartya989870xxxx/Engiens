@@ -133,7 +133,7 @@ public class GeminiProvider implements AiProvider {
             // Not JSON (e.g. a proxy error page): classify by status alone.
         }
         String safe = ProviderHttp.sanitize("HTTP " + status.value() + (grpcStatus.isEmpty() ? "" : " " + grpcStatus)
-                + (message.isEmpty() ? "" : ": " + message));
+                + (message.isEmpty() ? "" : ": " + message), config.apiKey());
         String lower = message.toLowerCase(java.util.Locale.ROOT);
         int code = status.value();
         AiFailureType type;

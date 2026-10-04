@@ -118,5 +118,15 @@ class GeminiProviderTest {
         AiProviderException e = failure(HttpStatus.BAD_REQUEST,
                 "{\"error\":{\"message\":\"bad key AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMY1234\",\"status\":\"INVALID_ARGUMENT\"}}");
         assertThat(e.getMessage()).doesNotContain("AIza").contains("[redacted]");
+        // Newer Google keys look different; they're redacted by shape too.
+        AiProviderException newer = failure(HttpStatus.BAD_REQUEST,
+                "{\"error\":{\"message\":\"bad key AQ.Ab8RN6DUMMYDUMMYDUMMYDUMMYDUMMY_x-1\",\"status\":\"INVALID_ARGUMENT\"}}");
+        assertThat(newer.getMessage()).doesNotContain("AQ.Ab8").contains("[redacted]");
+    }
+
+    @Test
+    void theConfiguredKeyIsRedactedWhateverItsFormat() {
+        assertThat(ProviderHttp.sanitize("echo: some-future-key-format-123 rejected", "some-future-key-format-123"))
+                .isEqualTo("echo: [redacted] rejected");
     }
 }

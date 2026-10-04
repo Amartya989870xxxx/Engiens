@@ -29,14 +29,20 @@ final class ProviderHttp {
                 : new AiProviderException(AiFailureType.NETWORK, "Could not reach the provider");
     }
 
-    private static final Pattern KEYS = Pattern.compile("AIza[0-9A-Za-z_\\-]{20,}|gsk_[0-9A-Za-z]{20,}|Bearer\\s+\\S+");
+    /** Known key shapes: Google's classic "AIza…" and newer "AQ.…" keys, Groq's "gsk_…", and bearer tokens. */
+    private static final Pattern KEYS = Pattern.compile(
+            "AIza[0-9A-Za-z_\\-]{20,}|AQ\\.[0-9A-Za-z_\\-.]{20,}|gsk_[0-9A-Za-z]{20,}|Bearer\\s+\\S+");
 
-    /** A short, single-line message with anything key-like removed: safe to log and to store. */
-    static String sanitize(String message) {
+    /**
+     * A short, single-line message with anything key-like removed: safe to log and to store. The configured
+     * key itself is always removed too, so a key format we don't recognise yet still can't leak.
+     */
+    static String sanitize(String message, String configuredKey) {
         if (message == null) {
             return null;
         }
-        String oneLine = KEYS.matcher(message).replaceAll("[redacted]").replaceAll("\\s+", " ").strip();
+        String text = configuredKey == null || configuredKey.isBlank() ? message : message.replace(configuredKey, "[redacted]");
+        String oneLine = KEYS.matcher(text).replaceAll("[redacted]").replaceAll("\\s+", " ").strip();
         return oneLine.length() <= 240 ? oneLine : oneLine.substring(0, 240) + "…";
     }
 
