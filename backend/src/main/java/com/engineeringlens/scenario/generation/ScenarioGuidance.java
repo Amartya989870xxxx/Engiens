@@ -61,7 +61,8 @@ final class ScenarioGuidance {
             - Checks must be deterministic and fast: no network, no files outside the workspace, no wall-clock dependence,
               no sleeps over 1 second, seeded randomness only. Each check has a 5 second limit; threads are fine for concurrency.
             - Assertion messages describe the expected behaviour ("a repeated request created a second order"), never the fix.
-            - checkNames lists the exact names passed to check(...), in order.
+            - checkNames lists the exact NAME STRINGS passed to check("...") (e.g. "ignores a repeated request"), in
+              registration order: never the Python/JS/Java function names.
             - referenceSolution.files gives the FULL new content of each editable file it changes (same paths). It must pass
               every check.
             """;
@@ -69,7 +70,9 @@ final class ScenarioGuidance {
     static String languageContract(ScenarioLanguage language) {
         return switch (language) {
             case PYTHON -> """
-                    Language PYTHON (Python 3.12, standard library only: no fastapi, sqlalchemy, pydantic, requests...).
+                    Language PYTHON (Python 3.12, standard library only). The sandbox has NO third-party packages: never import
+                    fastapi, starlette, sqlalchemy, pydantic, requests, httpx, jwt, firebase_admin or anything else outside the
+                    standard library and the workspace, in the starter, the checks or the solution; use small in-memory stand-ins.
                     Workspace files are .py modules. The workspace root is the import root (packages need no __init__.py):
                     a module imported as app.services.orders must be at app/services/orders.py. Drop repository prefixes
                     such as backend/ from paths so imports in the starter, the checks and the solution all resolve.
