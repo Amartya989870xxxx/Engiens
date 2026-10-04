@@ -57,8 +57,12 @@ def main():
                 emit(kind="summary", outcome="compile_error", message=f"{rel} line {e.lineno}: {e.msg}")
                 return
 
-    # 2. Load the checks (which import the user's modules).
+    # 2. Load the checks (which import the user's modules). The workspace root is the import root; first-level
+    #    folders are also importable, so code kept under a repository prefix (backend/app/...) still imports as app.
     sys.path.insert(0, HERE)
+    for entry in sorted(os.listdir(HERE)):
+        if os.path.isdir(os.path.join(HERE, entry)) and not entry.startswith("."):
+            sys.path.append(os.path.join(HERE, entry))
     try:
         import engiens
         importlib.import_module("engiens_checks")

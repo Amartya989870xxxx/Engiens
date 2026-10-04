@@ -70,7 +70,9 @@ final class ScenarioGuidance {
         return switch (language) {
             case PYTHON -> """
                     Language PYTHON (Python 3.12, standard library only: no fastapi, sqlalchemy, pydantic, requests...).
-                    Workspace files are .py modules; the workspace root is on sys.path (packages need no __init__.py).
+                    Workspace files are .py modules. The workspace root is the import root (packages need no __init__.py):
+                    a module imported as app.services.orders must be at app/services/orders.py. Drop repository prefixes
+                    such as backend/ from paths so imports in the starter, the checks and the solution all resolve.
                     Checks file (its whole content goes in checks.source):
                       from engiens import check
                       from app.services.orders import place_order      # import from workspace modules

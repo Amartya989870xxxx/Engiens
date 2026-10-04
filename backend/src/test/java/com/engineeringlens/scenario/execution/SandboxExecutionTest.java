@@ -77,6 +77,15 @@ class SandboxExecutionTest {
         assertThat(exits.status()).isEqualTo(RunStatus.RUNTIME_ERROR);
     }
 
+    /** Found on a real repository: code kept under backend/app/ but imported as `app`, the way the project runs it. */
+    @Test
+    void pythonCodeUnderARepositoryPrefixStillImportsAsTheProjectDoes() {
+        RunResult r = SANDBOX.run(ScenarioLanguage.PYTHON, List.of(new WorkspaceFile("backend/app/services/orders.py",
+                "def place(order, store):\n    store.append(order)\n    return order\n")),
+                "from engiens import check\nfrom app.services.orders import place\n\n@check(\"places\")\ndef _():\n    s = []\n    place(1, s)\n    assert s == [1]\n");
+        assertThat(r.status()).as(r.message()).isEqualTo(RunStatus.PASSED);
+    }
+
     @Test
     void codeCantReachTheNetworkSeeSecretsOrHostFilesOrWriteOutsideItsScratchSpace() {
         RunResult r = python("", """
