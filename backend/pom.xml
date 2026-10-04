@@ -18,6 +18,12 @@
 		<java.version>21</java.version>
 	</properties>
 	<dependencies>
+		<!-- Server-side PDF export of reviews and Scenario Lab assessments (from persisted data, never AI). -->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>3.0.5</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
