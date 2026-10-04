@@ -100,9 +100,15 @@ class ReviewFlowTest {
         health.deleteAll();
         doReturn(true).when(gemini).configured();
         doAnswer(inv -> {
-            prompts.add(inv.getArgument(1));
-            return new AiReply(ReviewFixtures.validJson(), 1000, 2000);
+            AiPrompt prompt = inv.getArgument(1);
+            prompts.add(prompt);
+            return isTeaching(prompt) ? new AiReply(ReviewFixtures.teachingJson(), 300, 400) : new AiReply(ReviewFixtures.validJson(), 1000, 2000);
         }).when(gemini).generate(anyString(), any(), any());
+    }
+
+    /** The second AI step (advice for this developer) is recognisable by its task. */
+    private static boolean isTeaching(AiPrompt prompt) {
+        return prompt.system().contains("Write advice for THIS developer");
     }
 
     private String register(String email) throws Exception {
@@ -171,11 +177,13 @@ class ReviewFlowTest {
                 .andExpect(jsonPath("$.review.reviewMetadata.reviewRunId").value(reviewId))
                 .andExpect(jsonPath("$.review.reviewMetadata.commitSha").value(COMMIT))
                 .andExpect(jsonPath("$.review.personalization.audience").value("FOUNDATION"))
+                .andExpect(jsonPath("$.review.personalizedLearningPlan.nextThingsToLearn[0].topic").value("Writing your first integration test"))
                 .andReturn().getResponse().getContentAsString();
 
-        // The model saw the selected source and the developer's level...
-        assertThat(prompts).hasSize(1);
-        assertThat(prompts.get(0).user()).contains(SOURCE_MARKER).contains("UNDERGRADUATE");
+        // Two AI steps: the assessment saw the source but not who wrote it; the teaching saw the developer but no source.
+        assertThat(prompts).hasSize(2);
+        assertThat(prompts.get(0).system() + prompts.get(0).user()).contains(SOURCE_MARKER).doesNotContain("UNDERGRADUATE");
+        assertThat(prompts.get(1).user()).contains("UNDERGRADUATE").doesNotContain(SOURCE_MARKER);
         // ...but no source is returned or stored, and the prompt itself is never persisted.
         assertThat(body).doesNotContain(SOURCE_MARKER);
         assertThat(storedReviews.findAll()).allSatisfy(r -> assertThat(r.getReviewJson()).doesNotContain(SOURCE_MARKER));
@@ -183,8 +191,8 @@ class ReviewFlowTest {
 
         // Token usage and the model's health are recorded.
         var run = reviewRuns.findById(java.util.UUID.fromString(reviewId)).orElseThrow();
-        assertThat(run.getInputTokens()).isEqualTo(1000);
-        assertThat(run.getAttemptCount()).isEqualTo(1);
+        assertThat(run.getInputTokens()).isEqualTo(1300); // both steps
+        assertThat(run.getAttemptCount()).isEqualTo(2);
         var modelHealth = health.findById("gemini:" + FIRST_MODEL).orElseThrow();
         assertThat(modelHealth.getState()).isEqualTo(AiModelState.HEALTHY);
         assertThat(modelHealth.getLastSuccessAt()).isNotNull();
@@ -206,11 +214,11 @@ class ReviewFlowTest {
 
         String first = startReview(auth, repoId, false);
         assertThat(startReview(auth, repoId, false)).isEqualTo(first);
-        assertThat(prompts).hasSize(1); // the reused review cost no AI call
+        assertThat(prompts).hasSize(2); // the reused review cost no AI call
 
         String second = startReview(auth, repoId, true);
         assertThat(second).isNotEqualTo(first);
-        assertThat(prompts).hasSize(2);
+        assertThat(prompts).hasSize(4);
         mvc.perform(get("/api/repositories/" + repoId + "/reviews/latest").header("Authorization", auth))
                 .andExpect(jsonPath("$.id").value(second));
         mvc.perform(get("/api/repositories/" + repoId + "/reviews").header("Authorization", auth))
@@ -228,6 +236,10 @@ class ReviewFlowTest {
                 // Longer than the router will wait: cool the model down instead of sleeping in a test.
                 throw new AiProviderException(AiFailureType.RATE_LIMITED, "quota", java.time.Duration.ofMinutes(5));
             }
+            AiPrompt prompt = inv.getArgument(1);
+            if (isTeaching(prompt)) {
+                return new AiReply(ReviewFixtures.teachingJson(), 10, 20);
+            }
             served.set(model);
             return new AiReply(ReviewFixtures.validJson(), 10, 20);
         }).when(gemini).generate(anyString(), any(), any());
@@ -240,6 +252,28 @@ class ReviewFlowTest {
                 .andExpect(jsonPath("$.fallbackUsed").value(true));
         assertThat(served.get()).isEqualTo("gemini-3.7-flash");
         assertThat(health.findById("gemini:" + FIRST_MODEL).orElseThrow().getState()).isEqualTo(AiModelState.COOLDOWN);
+    }
+
+    @Test
+    void aReviewStillCompletesWhenPersonalisationFails() throws Exception {
+        String auth = register("review-teaching-fails@example.com");
+        String repoId = importRepo(auth, "untaught");
+        doAnswer(inv -> {
+            AiPrompt prompt = inv.getArgument(1);
+            if (isTeaching(prompt)) {
+                throw new AiProviderException(AiFailureType.REQUEST_INVALID, "rejected");
+            }
+            return new AiReply(ReviewFixtures.validJson(), 10, 20);
+        }).when(gemini).generate(anyString(), any(), any());
+
+        String reviewId = startReview(auth, repoId, false);
+
+        mvc.perform(get("/api/reviews/" + reviewId).header("Authorization", auth))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.review.personalization").doesNotExist())
+                .andExpect(jsonPath("$.review.reviewLimitations[-1]").value(org.hamcrest.Matchers.startsWith("Personalised advice couldn't")))
+                .andExpect(jsonPath("$.review.dimensions[0].assessment").value(
+                        ReviewFixtures.valid().get("dimensions").get(0).get("assessment").asString()));
     }
 
     @Test

@@ -46,6 +46,32 @@ public record ReviewDocument(
                 personalizedLearningPlan, positiveHighlights, reviewLimitations, personalization);
     }
 
+    private static final int MAX_ADVICE_PER_DIMENSION = 4;
+
+    /**
+     * Copies only the teaching fields from the personalisation step. Every assessment, finding and piece of
+     * evidence comes from this (neutral) review unchanged: that's what makes personalisation fair.
+     */
+    public ReviewDocument withTeaching(PersonalizedTeaching teaching) {
+        java.util.Map<RubricDimension, List<String>> advice = new java.util.EnumMap<>(RubricDimension.class);
+        teaching.dimensions().forEach(d -> advice.put(d.id(), d.personalizedAdvice().stream().limit(MAX_ADVICE_PER_DIMENSION).toList()));
+        List<DimensionReview> taught = dimensions.stream()
+                .map(d -> new DimensionReview(d.id(), d.name(), d.applicability(), d.assessment(), d.confidence(), d.summary(),
+                        d.strengths(), d.concerns(), d.tradeoffs(), advice.getOrDefault(d.id(), List.of())))
+                .toList();
+        return new ReviewDocument(reviewSchemaVersion, reviewMetadata, overallAssessment, executiveSummary, projectUnderstanding,
+                taught, crossCuttingFindings, featureEngineeringReview, scaleReadiness, priorityActions,
+                teaching.personalizedLearningPlan(), positiveHighlights, reviewLimitations, personalization);
+    }
+
+    public ReviewDocument withLimitation(String limitation) {
+        List<String> limitations = new java.util.ArrayList<>(reviewLimitations);
+        limitations.add(limitation);
+        return new ReviewDocument(reviewSchemaVersion, reviewMetadata, overallAssessment, executiveSummary, projectUnderstanding,
+                dimensions, crossCuttingFindings, featureEngineeringReview, scaleReadiness, priorityActions,
+                personalizedLearningPlan, positiveHighlights, List.copyOf(limitations), personalization);
+    }
+
     /** Set by Engiens from the run and the router, never by the model. */
     public record ReviewMetadata(String repositoryId, String analysisRunId, String reviewRunId, String commitSha, String provider,
             String model, boolean fallbackUsed, int rubricVersion, int contextSchemaVersion, String generatedAt) {

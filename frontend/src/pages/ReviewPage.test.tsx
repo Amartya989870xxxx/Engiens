@@ -104,5 +104,5 @@ test('a dimension that does not apply is shown as not assessable, not as a low g
   await userEvent.click(within(section).getByRole('button', { name: /Observability/ }))
   expect(within(section).getByText('Nothing to assess here.')).toBeInTheDocument()
   expect(within(section).queryByText(/Confidence:/)).not.toBeInTheDocument()
-  expect(screen.getByText(/Explanations written for: undergraduate, year 2/)).toBeInTheDocument()
+  expect(screen.getByText(/Advice written for: undergraduate, year 2/)).toBeInTheDocument()
 })

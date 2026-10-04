@@ -17,8 +17,15 @@ import com.engineeringlens.analysis.review.model.RubricDimension;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Builds the one review prompt from a loaded context. Provider-neutral text: adapters decide how it's
- * sent. The prompt contains the developer's source code, so it is never logged or stored.
+ * Builds the two review prompts. Provider-neutral text: adapters decide how it's sent.
+ * <ol>
+ * <li><b>Assessment</b>: code, signals and rubric, but nothing about the developer, so the verdicts can't
+ * depend on who is reading. Contains source code, so it is never logged or stored.</li>
+ * <li><b>Teaching</b>: the validated review plus the developer's profile, and no source code. It may only
+ * write advice and a learning plan.</li>
+ * </ol>
+ * One prompt with "don't let the profile change the assessment" wasn't enough: on a real repository the
+ * same model rated the same code STRONG for a student and SOLID for a senior engineer.
  */
 @Component
 public class ReviewPromptBuilder {
@@ -29,22 +36,29 @@ public class ReviewPromptBuilder {
         this.json = json;
     }
 
-    public AiPrompt build(LoadedContext loaded, Personalization personalization, ReviewPersonalizer personalizer) {
-        return new AiPrompt(system(personalizer.guidance(personalization)), user(loaded, personalization));
+    public AiPrompt assessment(LoadedContext loaded) {
+        return new AiPrompt(system(), user(loaded));
+    }
+
+    public AiPrompt teaching(ReviewDocument neutralReview, LoadedContext loaded, Personalization personalization,
+            ReviewPersonalizer personalizer) {
+        return new AiPrompt(teachingSystem(personalizer.guidance(personalization)),
+                "# DEVELOPER PROFILE\naudience: " + personalization.audience() + " (" + personalization.basis() + ")\n"
+                        + (loaded.developer() == null ? "no profile" : json.writeValueAsString(loaded.developer()))
+                        + "\n\n# THE ENGINEERING REVIEW (final; do not change it)\n" + json.writeValueAsString(neutralReview) + "\n");
     }
 
     /** Same inputs, plus exactly what the validator rejected. Models are stateless, so the context is resent. */
     public AiPrompt repair(AiPrompt original, String problem) {
         return new AiPrompt(original.system(), original.user() + "\n\n# YOUR PREVIOUS ANSWER WAS REJECTED\n"
                 + "The validator rejected it: " + problem + "\n"
-                + "Return ONLY one JSON object that follows the OUTPUT CONTRACT exactly: all required fields, only the listed "
-                + "enum values, exactly 16 dimensions, evidence objects with either file or signalId. Be concise so the answer "
-                + "is not cut off: prefer fewer, higher-value findings.");
+                + "Return ONLY one JSON object that follows the OUTPUT CONTRACT exactly: all required fields and only the "
+                + "listed enum values. Be concise so the answer is not cut off.");
     }
 
     // ---- system: role, rules, rubric, contract ----------------------------------------------------
 
-    static String system(String audienceGuidance) {
+    static String system() {
         StringBuilder s = new StringBuilder();
         s.append("""
                 # ROLE
@@ -73,14 +87,13 @@ public class ReviewPromptBuilder {
                    shown next to the code, or lineStart/lineEnd null when you cannot point at exact lines, or
                    {"signalId": "<exact ruleId from the signals>"}. Never invent paths, line numbers or signal ids.
                 9. Prefer a few high-value findings over many weak ones. At most 5 priorityActions and 5 positiveHighlights.
-                10. Personalisation changes HOW you explain, never WHAT you conclude: assessments, severities and findings must
-                    be identical for any developer; only wording, personalizedAdvice, learningValue and the learning plan adapt.
+                10. You are deliberately not told who wrote this code: judge the code alone, against the same bar for everyone.
+                    Write explanations for a developer with working experience. Leave every personalizedAdvice as [] and keep
+                    the learning plan general; a separate step tailors them to the developer.
                 11. Plain text only inside strings: no Markdown headings, no HTML. Short code snippets in exampleApproach are fine.
                 12. Return only the JSON object described in OUTPUT CONTRACT. No Markdown fences, no commentary.
-
-                # PERSONALISATION
                 """);
-        s.append(audienceGuidance).append("\n\n# REVIEW RUBRIC\nAssess every dimension below (all 16, in this order). "
+        s.append("\n# REVIEW RUBRIC\nAssess every dimension below (all 16, in this order). "
                 + "FRONTEND_CLIENT_ENGINEERING applies only if a frontend/client exists; otherwise NOT_APPLICABLE with "
                 + "assessment NOT_ASSESSABLE.\n");
         for (RubricDimension d : RubricDimension.values()) {
@@ -146,15 +159,45 @@ public class ReviewPromptBuilder {
             All arrays must be present (use [] when empty). Do not include reviewMetadata: Engiens adds it.
             """.formatted(ReviewDocument.SCHEMA_VERSION, ReviewDocument.SCHEMA_VERSION);
 
-    // ---- user: the evidence ---------------------------------------------------------------------
+    // ---- teaching: advice for this developer, from the finished review ---------------------------
 
-    String user(LoadedContext loaded, Personalization personalization) {
+    static String teachingSystem(String audienceGuidance) {
+        return """
+                # ROLE
+                You are a senior software engineer mentoring the developer described below. Another reviewer has already
+                assessed their project; that review is final.
+
+                # TASK
+                Write advice for THIS developer: for each rubric dimension, 0 to 3 short, concrete next steps grounded in that
+                dimension's findings, and a learning plan connected to this project.
+
+                # RULES
+                1. Never change, restate or contradict an assessment, severity or finding. You only teach.
+                2. Use only what the review says. Don't invent files, code or problems.
+                3. Never claim knowledge of any company's internal standards.
+                4. Plain text inside strings: no Markdown, no HTML.
+                5. Return only the JSON object below. No Markdown fences, no commentary.
+
+                # PERSONALISATION
+                """ + audienceGuidance + """
+
+
+                # OUTPUT CONTRACT
+                {
+                  "dimensions": [ {"id": RUBRIC_ID, "personalizedAdvice": [str]} ],   (one entry per dimension; [] if nothing useful)
+                  "personalizedLearningPlan": {"youAlreadyDoWell": [str],
+                      "nextThingsToLearn": [{"topic": str, "why": str, "connectionToProject": str, "suggestedOrder": 1..}],
+                      "advancedTopics": [str]}
+                }
+                RUBRIC_ID = one of the dimension ids used in the review, exactly as written.
+                """;
+    }
+
+    // ---- user: the evidence (nothing about the developer) -------------------------------------------
+
+    String user(LoadedContext loaded) {
         AnalysisContext ctx = loaded.context();
         StringBuilder u = new StringBuilder();
-        u.append("# DEVELOPER PROFILE (for personalisation only; never changes assessments)\n")
-                .append("audience: ").append(personalization.audience()).append(" (").append(personalization.basis()).append(")\n")
-                .append(loaded.developer() == null ? "no profile" : json.writeValueAsString(loaded.developer())).append("\n\n");
-
         u.append("# REPOSITORY PROFILE (deterministic; every detection lists its evidence)\n")
                 .append(json.writeValueAsString(ctx.profile())).append("\n\n");
 

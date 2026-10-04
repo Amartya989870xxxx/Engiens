@@ -140,6 +140,26 @@ public final class ReviewFixtures {
         return JSON.writeValueAsString(valid());
     }
 
+    /** A valid personalisation answer: advice for two dimensions and a learning plan. */
+    public static ObjectNode teaching() {
+        ObjectNode t = JSON.createObjectNode();
+        ArrayNode dims = t.putArray("dimensions");
+        dims.addObject().put("id", "TESTING_AND_QUALITY_ASSURANCE").set("personalizedAdvice",
+                strings("Start with one test for placing an order: it's the path users care about most."));
+        dims.addObject().put("id", "SECURITY").set("personalizedAdvice", strings("Read about why secrets belong in environment variables."));
+        ObjectNode plan = t.putObject("personalizedLearningPlan");
+        plan.set("youAlreadyDoWell", strings("You keep routes thin."));
+        plan.putArray("nextThingsToLearn").addObject().put("topic", "Writing your first integration test")
+                .put("why", "It proves the order flow works end to end.").put("connectionToProject", "app/services/orders.py")
+                .put("suggestedOrder", 1);
+        plan.set("advancedTopics", strings("Transaction isolation"));
+        return t;
+    }
+
+    public static String teachingJson() {
+        return JSON.writeValueAsString(teaching());
+    }
+
     public static List<String> dimensionIds() {
         return java.util.Arrays.stream(RubricDimension.values()).map(Enum::name).toList();
     }

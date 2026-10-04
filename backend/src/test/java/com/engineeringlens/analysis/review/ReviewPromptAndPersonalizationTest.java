@@ -8,6 +8,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import jakarta.validation.Validation;
+
 import com.engineeringlens.analysis.ai.AiPrompt;
 import com.engineeringlens.analysis.common.Confidence;
 import com.engineeringlens.analysis.common.ReviewDimension;
@@ -20,6 +22,7 @@ import com.engineeringlens.analysis.deterministic.DeterministicAnalysis;
 import com.engineeringlens.analysis.deterministic.Severity;
 import com.engineeringlens.analysis.deterministic.Signal;
 import com.engineeringlens.analysis.profile.RepositoryProfile;
+import com.engineeringlens.analysis.review.model.ReviewDocument;
 import com.engineeringlens.analysis.review.model.ReviewDocument.Personalization;
 import com.engineeringlens.analysis.review.model.RubricDimension;
 
@@ -63,7 +66,7 @@ class ReviewPromptAndPersonalizationTest {
 
     @Test
     void promptCarriesRubricSignalsAndNumberedCode() {
-        AiPrompt p = prompts.build(loaded(STUDENT), personalizer.personalize(STUDENT), personalizer);
+        AiPrompt p = prompts.assessment(loaded(STUDENT));
         for (RubricDimension d : RubricDimension.values()) {
             assertThat(p.system()).contains(d.name());
         }
@@ -74,21 +77,35 @@ class ReviewPromptAndPersonalizationTest {
     }
 
     @Test
-    void personalisationChangesOnlyTheTeachingNotTheEvidence() {
-        Personalization student = personalizer.personalize(STUDENT);
-        Personalization senior = personalizer.personalize(SENIOR);
-        AiPrompt a = prompts.build(loaded(STUDENT), student, personalizer);
-        AiPrompt b = prompts.build(loaded(SENIOR), senior, personalizer);
+    void theAssessmentPromptIsIdenticalForEveryDeveloper() {
+        AiPrompt student = prompts.assessment(loaded(STUDENT));
+        AiPrompt senior = prompts.assessment(loaded(SENIOR));
 
-        assertThat(a.system()).isNotEqualTo(b.system()); // different guidance for the audience
-        String evidenceA = a.user().substring(a.user().indexOf("# REPOSITORY PROFILE"));
-        String evidenceB = b.user().substring(b.user().indexOf("# REPOSITORY PROFILE"));
-        assertThat(evidenceA).isEqualTo(evidenceB); // identical facts, signals and code
+        // The model judging the code can't know who wrote it, so it can't grade on a curve.
+        assertThat(student.system()).isEqualTo(senior.system());
+        assertThat(student.user()).isEqualTo(senior.user());
+        assertThat(student.system() + student.user()).doesNotContain("UNDERGRADUATE").doesNotContain("FOUNDATION")
+                .doesNotContain("Write cleaner code");
+    }
+
+    @Test
+    void theTeachingPromptHasTheProfileAndTheReviewButNoSourceCode() {
+        ReviewDocument neutral = new ReviewValidator(Validation.buildDefaultValidatorFactory().getValidator())
+                .validate(ReviewFixtures.validJson(), ReviewFixtures.INDEX).document();
+        Personalization student = personalizer.personalize(STUDENT);
+        AiPrompt p = prompts.teaching(neutral, loaded(STUDENT), student, personalizer);
+
+        assertThat(p.system()).contains(personalizer.guidance(student)).contains("Never change, restate or contradict an assessment");
+        assertThat(p.user()).contains("audience: FOUNDATION (Undergraduate, year 2)").contains("UNDERGRADUATE")
+                .contains("A tidy service with clear layers.") // the review itself
+                .doesNotContain("from fastapi import FastAPI"); // no source code
+        assertThat(prompts.teaching(neutral, loaded(SENIOR), personalizer.personalize(SENIOR), personalizer).system())
+                .isNotEqualTo(p.system());
     }
 
     @Test
     void repairPromptSaysWhatWasWrong() {
-        AiPrompt original = prompts.build(loaded(STUDENT), personalizer.personalize(STUDENT), personalizer);
+        AiPrompt original = prompts.assessment(loaded(STUDENT));
         AiPrompt repair = prompts.repair(original, "dimensions size must be between 16 and 16");
         assertThat(repair.system()).isEqualTo(original.system());
         assertThat(repair.user()).startsWith(original.user()).contains("dimensions size must be between 16 and 16");

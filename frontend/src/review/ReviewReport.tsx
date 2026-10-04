@@ -246,7 +246,7 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
           <li>Engiens reviewed selected files from one commit against industry-oriented software engineering practices; it is not a full audit.</li>
         </ul>
         {review.personalization && (
-          <p className="mt-4 text-xs text-muted">Explanations written for: {review.personalization.basis.toLowerCase()}.</p>
+          <p className="mt-4 text-xs text-muted">Advice written for: {review.personalization.basis.toLowerCase()}.</p>
         )}
       </Section>
     </div>

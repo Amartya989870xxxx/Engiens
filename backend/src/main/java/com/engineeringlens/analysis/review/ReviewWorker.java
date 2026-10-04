@@ -60,17 +60,19 @@ class ReviewWorker {
             ImportedRepo repo = repositories.findById(run.getRepositoryId()).orElseThrow();
             AnalysisRun analysis = analysisRuns.findById(run.getAnalysisRunId()).orElseThrow();
             ReviewOrchestrator.Outcome outcome = orchestrator.review(run.getUserId(), repo, analysis, run.getId());
+            // The run records the model that made the assessment; attempts and tokens cover both AI steps.
             var routing = outcome.routing();
             String reviewJson = json.writeValueAsString(outcome.document());
             transaction.executeWithoutResult(tx -> {
                 reviews.save(new StoredReview(run.getId(), reviewJson));
-                run.complete(routing.provider(), routing.model(), routing.fallbackUsed(), routing.fallbackReason(), routing.attempts(),
-                        routing.inputTokens(), routing.outputTokens());
+                run.complete(routing.provider(), routing.model(), routing.fallbackUsed(), routing.fallbackReason(), outcome.attempts(),
+                        outcome.inputTokens(), outcome.outputTokens());
                 runs.save(run);
             });
-            log.info("Review completed: reviewRun={} provider={} model={} fallback={} reason={} attempts={} durationMs={} "
-                    + "inputTokens={} outputTokens={}", run.getId(), routing.provider(), routing.model(), routing.fallbackUsed(),
-                    routing.fallbackReason(), routing.attempts(), run.getDurationMs(), routing.inputTokens(), routing.outputTokens());
+            log.info("Review completed: reviewRun={} provider={} model={} fallback={} reason={} personalised={} attempts={} "
+                    + "durationMs={} inputTokens={} outputTokens={}", run.getId(), routing.provider(), routing.model(),
+                    routing.fallbackUsed(), routing.fallbackReason(), outcome.teaching() != null, outcome.attempts(),
+                    run.getDurationMs(), outcome.inputTokens(), outcome.outputTokens());
         } catch (AiUnavailableException e) {
             fail(run, e.code(), USER_MESSAGES.get(e.code()));
             log.warn("Review failed: reviewRun={} code={} detail={}", run.getId(), e.code(), e.getMessage());

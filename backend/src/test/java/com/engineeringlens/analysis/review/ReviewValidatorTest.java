@@ -143,4 +143,46 @@ class ReviewValidatorTest {
         doc.putObject("reviewMetadata").put("provider", "made-up").put("model", "gpt-99");
         assertThat(validate(doc).document().reviewMetadata()).isNull();
     }
+
+    @Test
+    void personalisationCanOnlyChangeAdviceAndTheLearningPlan() {
+        ReviewDocument neutral = validate(ReviewFixtures.valid()).document();
+        ObjectNode teaching = ReviewFixtures.teaching();
+        // A model that tries to regrade is ignored: the teaching type has no room for assessments.
+        ((ObjectNode) teaching.get("dimensions").get(0)).put("assessment", "NEEDS_ATTENTION").put("severity", "HIGH");
+        teaching.put("overallAssessment", "NEEDS_ATTENTION");
+
+        ReviewDocument taught = neutral.withTeaching(validator.validateTeaching(ReviewFixtures.JSON.writeValueAsString(teaching)));
+
+        assertThat(taught.dimensions()).extracting(ReviewDocument.DimensionReview::assessment)
+                .containsExactlyElementsOf(neutral.dimensions().stream().map(ReviewDocument.DimensionReview::assessment).toList());
+        assertThat(taught.overallAssessment()).isEqualTo(neutral.overallAssessment());
+        assertThat(taught.dimensions()).extracting(ReviewDocument.DimensionReview::concerns)
+                .containsExactlyElementsOf(neutral.dimensions().stream().map(ReviewDocument.DimensionReview::concerns).toList());
+        ReviewDocument.DimensionReview testing = taught.dimensions().stream()
+                .filter(d -> d.id() == RubricDimension.TESTING_AND_QUALITY_ASSURANCE).findFirst().orElseThrow();
+        assertThat(testing.personalizedAdvice()).containsExactly("Start with one test for placing an order: it's the path users care about most.");
+        // Dimensions the step didn't mention get no advice rather than the general text.
+        assertThat(taught.dimensions().get(0).personalizedAdvice()).isEmpty();
+        assertThat(taught.personalizedLearningPlan().nextThingsToLearn()).extracting(ReviewDocument.LearningTopic::topic)
+                .containsExactly("Writing your first integration test");
+    }
+
+    @Test
+    void rejectsMalformedPersonalisation() {
+        ObjectNode duplicate = ReviewFixtures.teaching();
+        ((ArrayNode) duplicate.get("dimensions")).addObject().put("id", "SECURITY").putArray("personalizedAdvice");
+        assertThatThrownBy(() -> validator.validateTeaching(ReviewFixtures.JSON.writeValueAsString(duplicate)))
+                .isInstanceOf(InvalidAiOutputException.class).hasMessageContaining("appears twice");
+
+        ObjectNode unknown = ReviewFixtures.teaching();
+        ((ObjectNode) unknown.get("dimensions").get(0)).put("id", "VIBES");
+        assertThatThrownBy(() -> validator.validateTeaching(ReviewFixtures.JSON.writeValueAsString(unknown)))
+                .isInstanceOf(InvalidAiOutputException.class);
+
+        ObjectNode noPlan = ReviewFixtures.teaching();
+        noPlan.remove("personalizedLearningPlan");
+        assertThatThrownBy(() -> validator.validateTeaching(ReviewFixtures.JSON.writeValueAsString(noPlan)))
+                .isInstanceOf(InvalidAiOutputException.class).hasMessageContaining("personalizedLearningPlan");
+    }
 }

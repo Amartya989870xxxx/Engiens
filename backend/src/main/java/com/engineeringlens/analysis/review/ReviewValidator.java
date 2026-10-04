@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 import com.engineeringlens.analysis.ai.InvalidAiOutputException;
+import com.engineeringlens.analysis.review.model.PersonalizedTeaching;
 import com.engineeringlens.analysis.review.model.ReviewDocument;
 import com.engineeringlens.analysis.review.model.RubricDimension;
 
@@ -107,6 +108,35 @@ public class ReviewValidator {
             throw new InvalidAiOutputException(problems.stream().sorted().limit(6).collect(Collectors.joining("; ")));
         }
         return new Validated(review, counts[0], counts[1]);
+    }
+
+    /**
+     * Validates the personalisation step's answer. Extra fields (say, an "assessment" the model added) are
+     * ignored by design: the type only has room for advice and the learning plan.
+     */
+    public PersonalizedTeaching validateTeaching(String raw) {
+        PersonalizedTeaching teaching;
+        try {
+            teaching = MAPPER.readValue(stripFences(raw), PersonalizedTeaching.class);
+        } catch (RuntimeException e) {
+            throw new InvalidAiOutputException("Not valid JSON for the contract: " + firstLine(e.getMessage()));
+        }
+        if (teaching == null) {
+            throw new InvalidAiOutputException("The answer must be a single JSON object.");
+        }
+        List<String> problems = new ArrayList<>();
+        for (ConstraintViolation<PersonalizedTeaching> v : validator.validate(teaching)) {
+            problems.add(v.getPropertyPath() + " " + v.getMessage());
+        }
+        if (teaching.dimensions() != null) {
+            EnumSet<RubricDimension> seen = EnumSet.noneOf(RubricDimension.class);
+            teaching.dimensions().stream().filter(d -> d != null && d.id() != null && !seen.add(d.id()))
+                    .forEach(d -> problems.add("dimension " + d.id() + " appears twice"));
+        }
+        if (!problems.isEmpty()) {
+            throw new InvalidAiOutputException(problems.stream().sorted().limit(6).collect(Collectors.joining("; ")));
+        }
+        return teaching;
     }
 
     /** Walks the whole document and fixes every "evidence" array against what really exists. */
