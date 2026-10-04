@@ -8,6 +8,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21, cache: maven }
+      # The Scenario Lab sandbox tests start real containers from these images.
+      - run: make sandbox-images
       - run: ./mvnw -B test
         working-directory: backend
 
