@@ -170,3 +170,128 @@ export async function getLatestAnalysis(repositoryId: string) {
     throw e
   }
 }
+
+// ---- AI engineering review (Phase 4D) ----------------------------------------------------------
+
+export type Assessment = 'STRONG' | 'SOLID' | 'DEVELOPING' | 'NEEDS_ATTENTION' | 'NOT_ASSESSABLE'
+export type Level3 = 'HIGH' | 'MEDIUM' | 'LOW'
+
+/** Either a file (optionally with lines) or a deterministic signal. Never both. */
+export type ReviewEvidence = { file?: string | null; lineStart?: number | null; lineEnd?: number | null; signalId?: string | null }
+
+export type ScaleImpact = {
+  currentScale: string | null
+  tenX: string | null
+  hundredX: string | null
+  largeScale: string | null
+  confidence: Level3 | null
+} | null
+
+export type Concern = {
+  id: string
+  title: string
+  severity: Level3
+  confidence: Level3
+  description: string
+  whyItMatters: string
+  engineeringImpact: string
+  scaleImpact: ScaleImpact
+  evidence: ReviewEvidence[]
+  recommendation: string
+  suggestedDirection: string | null
+  learningValue: { currentLevel: string; nextLevel: string; advancedLevel: string } | null
+}
+
+export type DimensionReview = {
+  id: string
+  name: string
+  applicability: 'APPLICABLE' | 'NOT_APPLICABLE'
+  assessment: Assessment
+  confidence: Level3
+  summary: string
+  strengths: { title: string; description: string; evidence: ReviewEvidence[] }[]
+  concerns: Concern[]
+  tradeoffs: { decision: string; benefit: string; cost: string; assessment: 'STRONG' | 'REASONABLE' | 'CONTEXT_DEPENDENT' | 'QUESTIONABLE' }[]
+  personalizedAdvice: string[]
+}
+
+export type ReviewDocument = {
+  reviewSchemaVersion: number
+  reviewMetadata: { provider: string; model: string; fallbackUsed: boolean; commitSha: string; generatedAt: string } | null
+  overallAssessment: { level: Assessment; confidence: Level3; summary: string; strongestAreas: string[]; highestPriorityAreas: string[] }
+  executiveSummary: {
+    whatThisProjectDoes: string
+    engineeringSummary: string
+    strongestAspect: string
+    biggestOpportunity: string
+    overallScaleConcern: string
+  }
+  projectUnderstanding: { projectType: string; architectureSummary: string; detectedStack: string[]; importantComponents: string[] }
+  dimensions: DimensionReview[]
+  crossCuttingFindings: (Omit<Concern, 'suggestedDirection' | 'learningValue'> & { category: string; exampleApproach: string | null })[]
+  featureEngineeringReview: {
+    feature: string
+    correctness: { assessment: Assessment; summary: string }
+    implementationQuality: { assessment: Assessment; summary: string }
+    edgeCases: { handled: string[]; missing: string[] }
+    failureModes: string[]
+    scaleConsiderations: string[]
+    recommendations: string[]
+    evidence: ReviewEvidence[]
+  }[]
+  scaleReadiness: {
+    summary: string
+    trafficGrowth: { assessment: Assessment; concerns: string[] }
+    dataGrowth: { assessment: Assessment; concerns: string[] }
+    concurrency: { assessment: Assessment; concerns: string[] }
+    failureRecovery: { assessment: Assessment; concerns: string[] }
+    operationalComplexity: { assessment: Assessment; concerns: string[] }
+    mostLikelyBottlenecks: { component: string; reason: string; confidence: Level3 }[]
+  }
+  priorityActions: { priority: number; title: string; reason: string; expectedBenefit: string; difficulty: Level3; relatedDimensions: string[] }[]
+  personalizedLearningPlan: {
+    youAlreadyDoWell: string[]
+    nextThingsToLearn: { topic: string; why: string; connectionToProject: string; suggestedOrder: number }[]
+    advancedTopics: string[]
+  }
+  positiveHighlights: { title: string; description: string; whyThisIsGood: string; evidence: ReviewEvidence[] }[]
+  reviewLimitations: string[]
+  personalization: { audience: string; basis: string } | null
+}
+
+export type ReviewRun = {
+  id: string
+  repositoryId: string
+  repositoryName: string | null
+  analysisRunId: string
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  commitSha: string | null
+  provider: string | null
+  model: string | null
+  fallbackUsed: boolean
+  errorCode: string | null
+  errorMessage: string | null
+  createdAt: string
+  completedAt: string | null
+  durationMs: number | null
+  review: ReviewDocument | null
+}
+
+export type Excerpt = { file: string; lineStart: number; lineEnd: number; lines: { number: number; text: string }[] }
+
+export const startReview = (repositoryId: string, regenerate = false) =>
+  api<ReviewRun>(`/api/repositories/${encodeURIComponent(repositoryId)}/reviews${regenerate ? '?regenerate=true' : ''}`, {
+    method: 'POST',
+  })
+
+export const getReview = (id: string) => api<ReviewRun>(`/api/reviews/${encodeURIComponent(id)}`)
+
+export const getReviewHistory = (repositoryId: string) =>
+  api<ReviewRun[]>(`/api/repositories/${encodeURIComponent(repositoryId)}/reviews`)
+
+export const getRecentReviews = () => api<ReviewRun[]>('/api/reviews')
+
+export const getExcerpt = (id: string, file: string, lineStart: number, lineEnd: number) =>
+  api<Excerpt>(
+    `/api/reviews/${encodeURIComponent(id)}/excerpt?file=${encodeURIComponent(file)}&lineStart=${lineStart}&lineEnd=${lineEnd}`,
+  )

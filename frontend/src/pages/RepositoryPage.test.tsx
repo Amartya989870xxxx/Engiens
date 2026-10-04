@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { ImportedRepository } from '../api'
+import { reviewRun } from '../review/fixture'
 import { RepositoryPage } from './RepositoryPage'
 
 afterEach(() => vi.restoreAllMocks())
@@ -31,10 +32,12 @@ function renderAt(id: string) {
 
 const notPrepared = () => json({ status: 404, code: 'ANALYSIS_NOT_FOUND', message: 'Not prepared yet.', fieldErrors: {} }, 404)
 
-/** Routes by URL: the repository, its latest preparation run, and the prepare action. */
-function mockServer(repo: unknown, latest: () => Response = notPrepared, prepare?: () => Response) {
+/** Routes by URL: the repository, its latest preparation run, the prepare action and its reviews. */
+function mockServer(repo: unknown, latest: () => Response = notPrepared, prepare?: () => Response, reviews: unknown[] = []) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input)
+    if (url.endsWith('/reviews') && init?.method === 'POST') return json(reviewRun({ id: 'rev-new', status: 'QUEUED', review: null }))
+    if (url.includes('/reviews')) return json(reviews)
     if (url.endsWith('/analyses/latest')) return latest()
     if (url.endsWith('/analyses') && init?.method === 'POST' && prepare) return prepare()
     return json(repo)
@@ -54,9 +57,10 @@ test('shows the imported repository’s metadata and file inventory', async () =
   expect(screen.getByText('54')).toBeInTheDocument()
   expect(screen.getByText('39')).toBeInTheDocument()
   expect(screen.getByText('Dependency directory')).toBeInTheDocument()
-  // Honest about what hasn't happened yet.
-  expect(screen.getByRole('button', { name: 'Run review' })).toBeDisabled()
-  expect(screen.getByText(/Nothing has been reviewed yet/)).toBeInTheDocument()
+  // Not reviewed yet: one clear action, no history.
+  expect(screen.getByRole('button', { name: 'Run review' })).toBeEnabled()
+  expect(screen.queryByRole('button', { name: 'Open latest review' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('list', { name: 'Review history' })).not.toBeInTheDocument()
 })
 
 test('a failed import explains why and can be retried', async () => {
@@ -64,6 +68,7 @@ test('a failed import explains why and can be retried', async () => {
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input)
     if (url.endsWith('/import')) return json({ ...ready })
+    if (url.includes('/reviews')) return json([])
     return url.endsWith('/analyses/latest') ? notPrepared() : json(failed)
   })
   renderAt('repo-1')
@@ -106,8 +111,8 @@ test('preparing for review shows what was detected and how much context was chos
   expect(screen.getByText('React, PostgreSQL')).toBeInTheDocument()
   expect(screen.getByText('17')).toBeInTheDocument()
   expect(screen.getByText('9 · 30 KB')).toBeInTheDocument()
-  // Still honest: preparation is not a review.
-  expect(screen.getByRole('button', { name: 'Run review' })).toBeDisabled()
+  // Preparation is not a review: nothing has been reviewed yet.
+  expect(screen.getByRole('button', { name: 'Run review' })).toBeEnabled()
 })
 
 test('a failed preparation shows the server’s reason and can be retried', async () => {
@@ -118,4 +123,39 @@ test('a failed preparation shows the server’s reason and can be retried', asyn
   renderAt('repo-1')
   expect(await screen.findByText(/temporarily limiting requests/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+})
+
+test('running a review starts it and opens the review page', async () => {
+  const fetch = mockServer(ready)
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={['/repositories/repo-1']}>
+        <Routes>
+          <Route path="/repositories/:id" element={<RepositoryPage />} />
+          <Route path="/reviews/:id" element={<p>Review rev-new</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+  await userEvent.click(await screen.findByRole('button', { name: 'Run review' }))
+
+  expect(await screen.findByText('Review rev-new')).toBeInTheDocument()
+  expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/repositories\/repo-1\/reviews$/), expect.objectContaining({ method: 'POST' }))
+})
+
+test('a reviewed repository offers the latest review, a fresh one, and its history', async () => {
+  const fetch = mockServer(ready, notPrepared, undefined, [
+    reviewRun({ id: 'rev-3', status: 'FAILED', review: null, model: null, createdAt: '2026-10-05T10:00:00Z' }),
+    reviewRun(),
+  ])
+  renderAt('repo-1')
+
+  expect(await screen.findByRole('button', { name: 'Open latest review' })).toBeInTheDocument()
+  const history = screen.getByRole('list', { name: 'Review history' })
+  expect(within(history).getAllByRole('link')).toHaveLength(2)
+  expect(within(history).getByText('Failed')).toBeInTheDocument()
+  expect(within(history).getByText('gemini-3.8-flash')).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Review again' }))
+  expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/reviews\?regenerate=true$/), expect.objectContaining({ method: 'POST' }))
 })

@@ -2,7 +2,7 @@ import { Logo } from './Logo'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, getRepositories, type Profile } from '../api'
+import { api, getRecentReviews, getRepositories, type Profile } from '../api'
 import { useAuth } from '../auth'
 import { describeLevel } from '../profile/options'
 import { ChartIcon, CloseIcon, ComposeIcon, FlaskIcon, LogOutIcon, MenuIcon, UserIcon } from './icons'
@@ -77,12 +77,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
 
       <RecentRepositories />
 
-      <section className="mt-8 px-5" aria-labelledby="recent-reviews">
-        <h2 id="recent-reviews" className="mb-2 text-xs font-medium text-muted">
-          Recent reviews
-        </h2>
-        <p className="text-[13px] leading-relaxed text-muted/70">Reviews you run will be listed here.</p>
-      </section>
+      <RecentReviews />
 
       <div className="mt-auto border-t border-line p-3">
         <AccountMenu />
@@ -122,6 +117,39 @@ function RecentRepositories() {
           </li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+/** Completed engineering reviews, newest first. */
+function RecentReviews() {
+  const reviews = useQuery({ queryKey: ['recent-reviews'], queryFn: getRecentReviews })
+  const items = Array.isArray(reviews.data) ? reviews.data.slice(0, RECENT_LIMIT) : []
+  return (
+    <section className="mt-8 px-3" aria-labelledby="recent-reviews">
+      <h2 id="recent-reviews" className="mb-1 px-2 text-xs font-medium text-muted">
+        Recent reviews
+      </h2>
+      {items.length === 0 ? (
+        <p className="px-2 text-[13px] leading-relaxed text-muted/70">Reviews you run will be listed here.</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {items.map((r) => (
+            <li key={r.id}>
+              <NavLink
+                to={`/reviews/${r.id}`}
+                className={({ isActive }) =>
+                  `block truncate rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-raised hover:text-ink ${
+                    isActive ? 'bg-raised text-ink' : 'text-muted'
+                  }`
+                }
+              >
+                {r.repositoryName ?? 'Review'}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
