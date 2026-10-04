@@ -109,7 +109,7 @@ public class ContextBuilder {
     }
 
     /** The longest prefix within maxBytes of UTF-8, cut at the last line break (or a character boundary). */
-    static String firstBytes(String text, int maxBytes) {
+    public static String firstBytes(String text, int maxBytes) {
         if (utf8Length(text) <= maxBytes) {
             return text;
         }
@@ -135,7 +135,7 @@ public class ContextBuilder {
         return text.getBytes(StandardCharsets.UTF_8).length;
     }
 
-    static String sha256(String text) {
+    public static String sha256(String text) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {

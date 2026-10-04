@@ -34,7 +34,6 @@ import com.engineeringlens.repository.ImportedRepoRepository;
 import com.engineeringlens.repository.RepoFileRepository;
 import com.engineeringlens.repository.RepositoryStatus;
 import com.engineeringlens.repository.RepositoryVisibility;
-import com.engineeringlens.user.UserProfile;
 import com.engineeringlens.user.UserProfileRepository;
 
 import tools.jackson.databind.ObjectMapper;
@@ -196,13 +195,7 @@ public class AnalysisPreparationService {
     }
 
     private DeveloperProfile developer(UUID userId) {
-        return profiles.findById(userId).map(AnalysisPreparationService::developer).orElse(null);
-    }
-
-    static DeveloperProfile developer(UserProfile p) {
-        return new DeveloperProfile(p.getLevel().name(), p.getClassYear(),
-                p.getWorkExperience() == null ? null : p.getWorkExperience().name(), p.getLanguages(), p.getFrameworks(),
-                p.getDatabases(), p.getExperienceAreas(), p.getGoals());
+        return profiles.findById(userId).map(DeveloperProfile::from).orElse(null);
     }
 
     private void fail(AnalysisRun run, String reason) {
