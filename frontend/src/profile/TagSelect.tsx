@@ -10,13 +10,16 @@ type Props = {
   value: string[]
   onChange: (value: string[]) => void
   placeholder?: string
+  /** false: only `options` can be chosen (e.g. a fixed list the server validates). */
+  allowCustom?: boolean
+  maxTags?: number
 }
 
 /**
- * Searchable multi-select. Picks from `options`, and also accepts anything
+ * Searchable multi-select. Picks from `options`, and (unless allowCustom is false) also accepts anything
  * typed that isn't listed, so nobody is blocked by a gap in our lists.
  */
-export function TagSelect({ label, options, value, onChange, placeholder }: Props) {
+export function TagSelect({ label, options, value, onChange, placeholder, allowCustom = true, maxTags = MAX_TAGS }: Props) {
   const id = useId()
   const listId = `${id}-list`
   const [query, setQuery] = useState('')
@@ -24,7 +27,7 @@ export function TagSelect({ label, options, value, onChange, placeholder }: Prop
   const [active, setActive] = useState(0)
 
   const typed = query.replace(/,/g, ' ').trim().slice(0, MAX_TAG_LENGTH)
-  const full = value.length >= MAX_TAGS
+  const full = value.length >= maxTags
 
   const choices = useMemo(() => {
     const chosen = new Set(value.map((v) => v.toLowerCase()))
@@ -33,8 +36,8 @@ export function TagSelect({ label, options, value, onChange, placeholder }: Prop
     // Prefix matches first, so typing "ja" puts Java above "Objective-C"-style substring hits.
     matches.sort((a, b) => Number(!a.toLowerCase().startsWith(q)) - Number(!b.toLowerCase().startsWith(q)))
     const exists = options.some((o) => o.toLowerCase() === q) || chosen.has(q)
-    return typed && !exists ? [...matches, `Add “${typed}”`] : matches
-  }, [options, value, typed])
+    return allowCustom && typed && !exists ? [...matches, `Add “${typed}”`] : matches
+  }, [options, value, typed, allowCustom])
 
   function pick(index: number) {
     const choice = choices[index]
@@ -102,7 +105,7 @@ export function TagSelect({ label, options, value, onChange, placeholder }: Prop
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
-          placeholder={full ? `Up to ${MAX_TAGS}` : value.length ? '' : placeholder}
+          placeholder={full ? `Up to ${maxTags}` : value.length ? '' : placeholder}
           className="min-w-24 flex-1 bg-transparent px-1 py-0.5 text-sm text-ink placeholder:text-muted/70 focus:outline-none"
         />
       </div>

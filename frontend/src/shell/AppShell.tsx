@@ -71,7 +71,17 @@ function Sidebar({ onClose }: { onClose: () => void }) {
           <ComposeIcon />
           New review
         </button>
-        <SoonItem icon={<FlaskIcon />} label="Scenario Lab" />
+        <NavLink
+          to="/scenario-lab"
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-white ${
+              isActive ? 'bg-raised text-ink' : 'text-muted'
+            }`
+          }
+        >
+          <FlaskIcon />
+          Scenario Lab
+        </NavLink>
         <SoonItem icon={<ChartIcon />} label="Progress" />
       </nav>
 

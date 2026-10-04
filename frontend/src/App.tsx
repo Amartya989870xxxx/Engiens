@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './auth'
@@ -10,6 +11,12 @@ import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RepositoryPage } from './pages/RepositoryPage'
 import { ReviewPage } from './pages/ReviewPage'
+import { LabAssessmentPage } from './scenario-history/LabAssessmentPage'
+import { LabCompletePage } from './scenario-lab/LabCompletePage'
+import { ScenarioLabPage } from './scenario-lab/ScenarioLabPage'
+
+// The workspace carries the code editor: load it only when a scenario is opened.
+const ScenarioWorkspacePage = lazy(() => import('./scenario-lab/ScenarioWorkspacePage').then((m) => ({ default: m.ScenarioWorkspacePage })))
 
 const queryClient = new QueryClient()
 
@@ -35,6 +42,17 @@ export default function App() {
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/repositories/:id" element={<RepositoryPage />} />
                   <Route path="/reviews/:id" element={<ReviewPage />} />
+                  <Route path="/scenario-lab" element={<ScenarioLabPage />} />
+                  <Route
+                    path="/scenario-lab/:labId/scenarios/:scenarioId"
+                    element={
+                      <Suspense fallback={<p className="px-6 py-10 text-sm text-muted">Loading scenario…</p>}>
+                        <ScenarioWorkspacePage />
+                      </Suspense>
+                    }
+                  />
+                  <Route path="/scenario-lab/complete/:labId" element={<LabCompletePage />} />
+                  <Route path="/repositories/:repositoryId/scenario-labs/:labId" element={<LabAssessmentPage />} />
                 </Route>
               </Route>
             </Route>

@@ -1,8 +1,9 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ApiError, getReview, startReview, type ReviewRun } from '../api'
+import { ApiError, downloadFile, getReview, startReview, type ReviewRun } from '../api'
 import { ReviewReport } from '../review/ReviewReport'
-import { Button } from '../ui'
+import { ScenarioLabHistory } from '../scenario-history/ScenarioLabHistory'
+import { Button, ErrorBanner } from '../ui'
 
 const dateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -37,6 +38,7 @@ export function ReviewPage() {
 
 function ReviewView({ run }: { run: ReviewRun }) {
   const repoName = run.repositoryName ?? 'Repository'
+  const pdf = useMutation({ mutationFn: () => downloadFile(`/api/reviews/${run.id}/pdf`, 'engiens-review.pdf') })
   return (
     <article>
       <Link to={`/repositories/${run.repositoryId}`} className="font-mono text-xs text-muted transition-colors hover:text-ink">
@@ -55,12 +57,25 @@ function ReviewView({ run }: { run: ReviewRun }) {
         {run.completedAt && <span>Reviewed {dateFormat.format(new Date(run.completedAt))}</span>}
         {run.model && <span>Reviewed with {run.model}</span>}
       </p>
+      {run.status === 'COMPLETED' && run.review && (
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <Button type="button" variant="secondary" className="h-8" busy={pdf.isPending} onClick={() => pdf.mutate()}>
+            Export PDF
+          </Button>
+          <ErrorBanner error={pdf.error} />
+        </div>
+      )}
 
       <div className="mt-12">
         {(run.status === 'QUEUED' || run.status === 'RUNNING') && <InProgress />}
         {run.status === 'FAILED' && <Failed run={run} />}
         {run.status === 'COMPLETED' && run.review && <ReviewReport reviewId={run.id} review={run.review} />}
       </div>
+      {run.status === 'COMPLETED' && run.review && (
+        <div className="mt-20">
+          <ScenarioLabHistory repositoryId={run.repositoryId} reviewId={run.id} />
+        </div>
+      )}
     </article>
   )
 }

@@ -295,3 +295,259 @@ export const getExcerpt = (id: string, file: string, lineStart: number, lineEnd:
   api<Excerpt>(
     `/api/reviews/${encodeURIComponent(id)}/excerpt?file=${encodeURIComponent(file)}&lineStart=${lineStart}&lineEnd=${lineEnd}`,
   )
+
+// ---- Scenario Lab ---------------------------------------------------------------------------------
+
+export type ScenarioRole =
+  | 'FRONTEND_ENGINEER'
+  | 'BACKEND_ENGINEER'
+  | 'FULL_STACK_ENGINEER'
+  | 'DEVOPS_ENGINEER'
+  | 'INFRASTRUCTURE_ENGINEER'
+  | 'CLOUD_ENGINEER'
+  | 'NETWORK_ENGINEER'
+  | 'AI_ENGINEER'
+  | 'ML_ENGINEER'
+  | 'MLOPS_ENGINEER'
+  | 'AI_ML_ENGINEER'
+  | 'AI_RESEARCHER'
+  | 'SOFTWARE_ARCHITECT'
+  | 'BROAD_ENGINEERING'
+export type Seniority = 'BEGINNER' | 'SDE1' | 'SDE2' | 'SDE3' | 'SENIOR_ARCHITECT'
+export type LabStatus = 'GENERATING' | 'ACTIVE' | 'FINALIZING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+export type ExecutionCapability = 'CODE' | 'APPROACH_ONLY'
+export type WorkMode = 'CODE' | 'APPROACH'
+export type ScenarioLanguage = 'PYTHON' | 'JAVA' | 'JAVASCRIPT' | 'TYPESCRIPT'
+export type EvaluationStatus = 'PENDING' | 'COMPLETED' | 'FAILED'
+
+export type ScenarioSummary = {
+  id: string
+  position: number
+  title: string
+  role: ScenarioRole
+  category: string
+  difficulty: string
+  executionCapability: ExecutionCapability
+  language: ScenarioLanguage | null
+  submitted: boolean
+  evaluationStatus: EvaluationStatus | null
+}
+
+export type ScenarioLab = {
+  id: string
+  repositoryId: string
+  repositoryName: string | null
+  repositoryUrl: string | null
+  reviewId: string | null
+  commitSha: string
+  roles: ScenarioRole[]
+  seniority: Seniority
+  scenarioCount: number
+  scenariosReady: number
+  status: LabStatus
+  errorCode: string | null
+  errorMessage: string | null
+  createdAt: string
+  completedAt: string | null
+  scenarios: ScenarioSummary[]
+}
+
+export type CreateLabRequest = {
+  repositoryUrl?: string
+  repositoryId?: string
+  reviewId?: string
+  roles: ScenarioRole[]
+  seniority: Seniority
+  scenarioCount: 5 | 10 | 20
+}
+
+export type ScenarioEvidence = { file: string; lineStart: number | null; lineEnd: number | null; explanation: string }
+export type ScenarioDocument = {
+  scenarioSchemaVersion: number
+  title: string
+  summary: string
+  incident: string
+  context: string
+  task: string
+  expectedBehaviour: string[]
+  constraints: string[]
+  evidence: ScenarioEvidence[]
+}
+export type WorkspaceFileView = { path: string; editable: boolean; starterContent: string; content: string }
+export type FileContent = { path: string; content: string }
+
+export type ScenarioDetail = {
+  id: string
+  labId: string
+  position: number
+  scenarioCount: number
+  repositoryName: string | null
+  commitSha: string
+  title: string
+  role: ScenarioRole
+  seniority: Seniority
+  category: string
+  difficulty: string
+  executionCapability: ExecutionCapability
+  language: ScenarioLanguage | null
+  document: ScenarioDocument
+  files: WorkspaceFileView[]
+  draftMode: WorkMode
+  draftApproach: string | null
+  draftUpdatedAt: string | null
+  submitted: boolean
+  evaluationStatus: EvaluationStatus | null
+}
+
+export type RunStatus = 'PASSED' | 'FAILED' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIMEOUT' | 'LIMIT_EXCEEDED'
+export type CheckResult = { name: string; passed: boolean; message: string | null; durationMs: number }
+export type RunResult = {
+  status: RunStatus
+  passed: number
+  total: number
+  durationMs: number
+  checks: CheckResult[]
+  message: string | null
+  stdout: string
+  stderr: string
+  outputTruncated: boolean
+}
+
+export type AttemptStatus = {
+  id: string
+  scenarioId: string
+  mode: WorkMode
+  runResult: RunResult | null
+  evaluationStatus: EvaluationStatus
+  errorCode: string | null
+  errorMessage: string | null
+  createdAt: string
+}
+
+export type ScenarioEvaluation = {
+  verdict: Assessment
+  confidence: Level3
+  assessment: string
+  whatWasCorrect: string[]
+  whatWasMissed: string[]
+  rootCause: string
+  engineeringJudgment: string
+  tradeoffs: string[]
+  scaleImpact: string
+  regressionRisk: string
+  testingAssessment: string
+  recommendedFix: string
+  referenceApproach: string
+}
+
+export type LabAssessment = {
+  overallAssessment: { summary: string; engineeringLevel: string; confidence: Level3 }
+  strengths: string[]
+  growthAreas: string[]
+  scenarioLearning: { scenarioId: string; learningPoints: string[] }[]
+  learningRecommendations: { topic: string; why: string; connectionToProject: string }[]
+  limitations: string[]
+  personalizedFor: string | null
+}
+
+export type ScenarioResult = {
+  scenarioId: string
+  position: number
+  title: string
+  role: ScenarioRole
+  category: string
+  difficulty: string
+  executionCapability: ExecutionCapability
+  language: ScenarioLanguage | null
+  document: ScenarioDocument
+  mode: WorkMode
+  submittedFiles: FileContent[]
+  submittedApproach: string | null
+  runResult: RunResult | null
+  evaluation: ScenarioEvaluation | null
+  reference: {
+    expectedConcepts: string[]
+    referenceReasoning: string
+    solution: { files: FileContent[]; explanation: string } | null
+  } | null
+  learningPoints: string[]
+  submittedAt: string
+}
+
+export type LabAssessmentReport = {
+  id: string
+  number: number
+  repositoryId: string
+  repositoryName: string | null
+  repositoryUrl: string | null
+  reviewId: string | null
+  commitSha: string
+  roles: ScenarioRole[]
+  seniority: Seniority
+  scenarioCount: number
+  createdAt: string
+  completedAt: string
+  assessment: LabAssessment
+  scenarios: ScenarioResult[]
+}
+
+export type LabHistoryItem = {
+  id: string
+  number: number
+  roles: ScenarioRole[]
+  seniority: Seniority
+  scenarioCount: number
+  scenariosCompleted: number
+  commitSha: string
+  reviewId: string | null
+  completedAt: string
+}
+
+const lab = (labId: string) => `/api/scenario-labs/${encodeURIComponent(labId)}`
+const scenario = (labId: string, scenarioId: string) => `${lab(labId)}/scenarios/${encodeURIComponent(scenarioId)}`
+
+export const createLab = (request: CreateLabRequest) => api<ScenarioLab>('/api/scenario-labs', { method: 'POST', body: request })
+/** The open lab, or null when there is none (the server answers 204). */
+export const getActiveLab = async () => (await api<ScenarioLab | undefined>('/api/scenario-labs/active')) ?? null
+export const getLab = (labId: string) => api<ScenarioLab>(lab(labId))
+export const cancelLab = (labId: string) => api<ScenarioLab>(`${lab(labId)}/cancel`, { method: 'POST' })
+export const retryFinalization = (labId: string) => api<void>(`${lab(labId)}/finalize`, { method: 'POST' })
+export const getScenario = (labId: string, scenarioId: string) => api<ScenarioDetail>(scenario(labId, scenarioId))
+export const saveDraft = (labId: string, scenarioId: string, draft: { mode: WorkMode; files?: FileContent[]; approach?: string }) =>
+  api<void>(`${scenario(labId, scenarioId)}/draft`, { method: 'PUT', body: draft })
+export const runScenario = (labId: string, scenarioId: string, files: FileContent[]) =>
+  api<RunResult>(`${scenario(labId, scenarioId)}/run`, { method: 'POST', body: { files } })
+export const submitScenario = (labId: string, scenarioId: string, body: { mode: WorkMode; files?: FileContent[]; approach?: string }) =>
+  api<AttemptStatus>(`${scenario(labId, scenarioId)}/submit`, { method: 'POST', body })
+export const retryEvaluation = (labId: string, scenarioId: string) =>
+  api<AttemptStatus>(`${scenario(labId, scenarioId)}/attempt/retry-evaluation`, { method: 'POST' })
+export const getLabHistory = (repositoryId: string) =>
+  api<LabHistoryItem[]>(`/api/repositories/${encodeURIComponent(repositoryId)}/scenario-labs`)
+export const getLabAssessment = (labId: string) => api<LabAssessmentReport>(`${lab(labId)}/assessment`)
+
+/**
+ * Downloads a file the server generates (e.g. a PDF) with the user's token, then hands it to the browser
+ * as a normal download. A plain link can't send the Authorization header.
+ */
+export async function downloadFile(path: string, fallbackName: string) {
+  const token = tokenStore.get()
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  } catch {
+    throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Check your connection and try again.')
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new ApiError(res.status, err?.code ?? 'UNKNOWN', err?.message ?? 'The download failed. Please try again.')
+  }
+  const name = /filename="?([^";]+)"?/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallbackName
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
