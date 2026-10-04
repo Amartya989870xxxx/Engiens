@@ -157,4 +157,16 @@ class AuthProfileFlowTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_GITHUB_URL"));
     }
+
+    @Test
+    void unknownAddressesAreNotFoundRatherThanServerErrors() throws Exception {
+        String token = register("unknown-path@example.com");
+        mvc.perform(get("/api/does-not-exist").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ENDPOINT_NOT_FOUND"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/profile")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+    }
 }

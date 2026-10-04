@@ -11,7 +11,9 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -44,6 +46,19 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return ResponseEntity.badRequest()
                 .body(ApiError.of(400, "MALFORMED_REQUEST", "The request contains an invalid value for '" + ex.getName() + "'"));
+    }
+
+    /** An address no endpoint serves is a 404, not a server failure (e.g. a frontend newer than the running backend). */
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ApiError> handleNoEndpoint(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiError.of(404, "ENDPOINT_NOT_FOUND", "This address isn't available on the server."));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ApiError> handleMethod(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ApiError.of(405, "METHOD_NOT_ALLOWED", "This address doesn't support " + ex.getMethod() + " requests."));
     }
 
     @ExceptionHandler(Exception.class)
