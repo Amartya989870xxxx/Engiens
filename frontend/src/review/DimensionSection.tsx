@@ -2,6 +2,7 @@ import type { DimensionReview } from '../api'
 import { AssessmentMark } from './AssessmentMark'
 import { titleCase } from './assessment'
 import { EvidenceList } from './Evidence'
+import { AiText } from '../shared/Reveal'
 
 const SCALE_ROWS = [
   ['currentScale', 'Today'],
@@ -42,7 +43,7 @@ export function DimensionSection({
       </button>
       {open && (
         <div className="space-y-8 pb-10 animate-fade-in motion-reduce:animate-none">
-          <p className="max-w-3xl text-[15px] leading-relaxed text-ink/90">{d.summary}</p>
+          <AiText as="p" text={d.summary} className="max-w-3xl text-[15px] leading-relaxed text-ink/90" />
           {d.assessment !== 'NOT_ASSESSABLE' && (
             <p className="text-xs text-muted">Confidence: {titleCase(d.confidence)}</p>
           )}
@@ -52,7 +53,7 @@ export function DimensionSection({
               {d.strengths.map((s, i) => (
                 <div key={i}>
                   <p className="text-ink">{s.title}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">{s.description}</p>
+                  <AiText as="p" text={s.description} className="mt-1 text-sm leading-relaxed text-muted" />
                   <EvidenceList reviewId={reviewId} evidence={s.evidence} />
                 </div>
               ))}
@@ -67,7 +68,7 @@ export function DimensionSection({
                     {c.id} · {titleCase(c.severity)} severity · {titleCase(c.confidence)} confidence
                   </p>
                   <h4 className="mt-1 text-[17px] text-ink">{c.title}</h4>
-                  <p className="mt-2 text-sm leading-relaxed text-ink/85">{c.description}</p>
+                  <AiText as="p" text={c.description} className="mt-2 text-sm leading-relaxed text-ink/85" />
                   <dl className="mt-4 space-y-3 text-sm">
                     <Row label="Why it matters">{c.whyItMatters}</Row>
                     <Row label="Engineering impact">{c.engineeringImpact}</Row>
@@ -84,7 +85,7 @@ export function DimensionSection({
                         {SCALE_ROWS.filter(([k]) => c.scaleImpact?.[k]).map(([k, label]) => (
                           <div key={k} className="grid gap-1 py-2 sm:grid-cols-[8rem_1fr] sm:gap-4">
                             <dt className="text-muted">{label}</dt>
-                            <dd className="text-ink/85">{c.scaleImpact?.[k]}</dd>
+                            <AiText as="dd" text={c.scaleImpact?.[k] ?? ''} className="text-ink/85" />
                           </div>
                         ))}
                       </dl>
@@ -125,7 +126,9 @@ export function DimensionSection({
             <Block title="For you">
               <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-ink/90 marker:text-muted">
                 {d.personalizedAdvice.map((a, i) => (
-                  <li key={i}>{a}</li>
+                  <li key={i}>
+                    <AiText text={a} />
+                  </li>
                 ))}
               </ul>
             </Block>
@@ -149,7 +152,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="grid gap-1 sm:grid-cols-[10rem_1fr] sm:gap-4">
       <dt className="text-muted">{label}</dt>
-      <dd className="leading-relaxed text-ink/85">{children}</dd>
+      <dd className="leading-relaxed text-ink/85">{typeof children === 'string' ? <AiText text={children} /> : children}</dd>
     </div>
   )
 }
@@ -158,7 +161,7 @@ function Stacked({ label, children }: { label: string; children: React.ReactNode
   return (
     <div>
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-1 leading-relaxed text-ink/85">{children}</dd>
+      <dd className="mt-1 leading-relaxed text-ink/85">{typeof children === 'string' ? <AiText text={children} /> : children}</dd>
     </div>
   )
 }

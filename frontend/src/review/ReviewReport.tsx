@@ -4,6 +4,7 @@ import { AssessmentMark } from './AssessmentMark'
 import { ASSESSMENT, titleCase } from './assessment'
 import { DimensionSection } from './DimensionSection'
 import { EvidenceList } from './Evidence'
+import { AiText, RevealScope } from '../shared/Reveal'
 
 const SCALE_AREAS = [
   ['trafficGrowth', 'Traffic growth'],
@@ -32,7 +33,7 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
   const e = review.executiveSummary
 
   return (
-    <div className="space-y-16">
+    <RevealScope id={`review:${reviewId}`} className="space-y-16">
       <section aria-labelledby="overall">
         <h2 id="overall" className="sr-only">
           Overall assessment
@@ -43,7 +44,7 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
           <AssessmentMark value={o.level} showLabel={false} />
           <span className="text-xs text-muted">{titleCase(o.confidence)} confidence</span>
         </div>
-        <p className="mt-4 max-w-3xl text-[17px] leading-relaxed text-ink/90">{o.summary}</p>
+        <AiText as="p" text={o.summary} className="mt-4 max-w-3xl text-[17px] leading-relaxed text-ink/90" />
       </section>
 
       <Section title="Executive summary">
@@ -62,8 +63,8 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
             {review.positiveHighlights.map((h, i) => (
               <div key={i}>
                 <p className="text-[17px] text-ink">{h.title}</p>
-                <p className="mt-2 text-sm leading-relaxed text-ink/85">{h.description}</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{h.whyThisIsGood}</p>
+                <AiText as="p" text={h.description} className="mt-2 text-sm leading-relaxed text-ink/85" />
+                <AiText as="p" text={h.whyThisIsGood} className="mt-2 text-sm leading-relaxed text-muted" />
                 <EvidenceList reviewId={reviewId} evidence={h.evidence} />
               </div>
             ))}
@@ -112,11 +113,11 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
                   {f.id} · {titleCase(f.severity)} severity · {titleCase(f.confidence)} confidence
                 </p>
                 <h3 className="mt-1 text-[17px] text-ink">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink/85">{f.description}</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{f.whyItMatters}</p>
+                <AiText as="p" text={f.description} className="mt-2 text-sm leading-relaxed text-ink/85" />
+                <AiText as="p" text={f.whyItMatters} className="mt-2 text-sm leading-relaxed text-muted" />
                 <p className="mt-2 text-sm leading-relaxed text-ink/85">
                   <span className="text-muted">Recommendation: </span>
-                  {f.recommendation}
+                  <AiText text={f.recommendation} />
                 </p>
                 {f.exampleApproach && (
                   <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-md border border-line bg-canvas p-3 font-mono text-[12px] text-ink/85">
@@ -141,13 +142,13 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
                     <dt className="flex items-center justify-between text-muted">
                       Correctness <AssessmentMark value={f.correctness.assessment} />
                     </dt>
-                    <dd className="mt-2 leading-relaxed text-ink/85">{f.correctness.summary}</dd>
+                    <AiText as="dd" text={f.correctness.summary} className="mt-2 leading-relaxed text-ink/85" />
                   </div>
                   <div>
                     <dt className="flex items-center justify-between text-muted">
                       Implementation <AssessmentMark value={f.implementationQuality.assessment} />
                     </dt>
-                    <dd className="mt-2 leading-relaxed text-ink/85">{f.implementationQuality.summary}</dd>
+                    <AiText as="dd" text={f.implementationQuality.summary} className="mt-2 leading-relaxed text-ink/85" />
                   </div>
                 </dl>
                 <div className="mt-6 grid gap-6 text-sm sm:grid-cols-2">
@@ -165,7 +166,7 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
       )}
 
       <Section title="Scale readiness">
-        <p className="max-w-3xl text-[15px] leading-relaxed text-ink/90">{review.scaleReadiness.summary}</p>
+        <AiText as="p" text={review.scaleReadiness.summary} className="max-w-3xl text-[15px] leading-relaxed text-ink/90" />
         <p className="mt-2 text-xs text-muted">Engineering scenarios from the code, not measurements: runtime load wasn't observed.</p>
         <dl className="mt-6 divide-y divide-line border-y border-line">
           {SCALE_AREAS.map(([key, label]) => {
@@ -176,7 +177,7 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
                 <dd>
                   <AssessmentMark value={area.assessment} />
                 </dd>
-                <dd className="text-sm leading-relaxed text-muted">{area.concerns.join(' ')}</dd>
+                <AiText as="dd" text={area.concerns.join(' ')} className="text-sm leading-relaxed text-muted" />
               </div>
             )
           })}
@@ -207,8 +208,8 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
                   <span className="font-display text-2xl text-muted">{a.priority}</span>
                   <div>
                     <p className="text-[17px] text-ink">{a.title}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-ink/85">{a.reason}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-muted">{a.expectedBenefit}</p>
+                    <AiText as="p" text={a.reason} className="mt-1 text-sm leading-relaxed text-ink/85" />
+                    <AiText as="p" text={a.expectedBenefit} className="mt-1 text-sm leading-relaxed text-muted" />
                     <p className="mt-1 text-xs text-muted">Difficulty: {titleCase(a.difficulty)}</p>
                   </div>
                 </li>
@@ -228,8 +229,8 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
                 .map((t) => (
                   <li key={t.topic}>
                     <p className="text-ink">{t.topic}</p>
-                    <p className="mt-1 leading-relaxed text-muted">{t.why}</p>
-                    <p className="mt-1 leading-relaxed text-ink/75">{t.connectionToProject}</p>
+                    <AiText as="p" text={t.why} className="mt-1 leading-relaxed text-muted" />
+                    <AiText as="p" text={t.connectionToProject} className="mt-1 leading-relaxed text-ink/75" />
                   </li>
                 ))}
             </ol>
@@ -241,7 +242,9 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
       <Section title="What this review couldn't determine">
         <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted marker:text-line-strong">
           {review.reviewLimitations.map((l, i) => (
-            <li key={i}>{l}</li>
+            <li key={i}>
+              <AiText text={l} />
+            </li>
           ))}
           <li>Engiens reviewed selected files from one commit against industry-oriented software engineering practices; it is not a full audit.</li>
         </ul>
@@ -249,7 +252,7 @@ export function ReviewReport({ reviewId, review }: { reviewId: string; review: R
           <p className="mt-4 text-xs text-muted">Advice written for: {review.personalization.basis.toLowerCase()}.</p>
         )}
       </Section>
-    </div>
+    </RevealScope>
   )
 }
 
@@ -266,7 +269,7 @@ function SummaryRow({ label, children }: { label: string; children: ReactNode })
   return (
     <div className="grid gap-1 py-3 sm:grid-cols-[12rem_1fr] sm:gap-6">
       <dt className="text-sm text-muted">{label}</dt>
-      <dd className="text-[15px] leading-relaxed text-ink/90">{children}</dd>
+      <dd className="text-[15px] leading-relaxed text-ink/90">{typeof children === 'string' ? <AiText text={children} /> : children}</dd>
     </div>
   )
 }
@@ -278,7 +281,9 @@ function Bullets({ title, items, className = '' }: { title: string; items: strin
       <h3 className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-muted">{title}</h3>
       <ul className="list-disc space-y-1.5 pl-5 leading-relaxed text-ink/85 marker:text-muted">
         {items.map((it, i) => (
-          <li key={i}>{it}</li>
+          <li key={i}>
+            <AiText text={it} />
+          </li>
         ))}
       </ul>
     </div>
