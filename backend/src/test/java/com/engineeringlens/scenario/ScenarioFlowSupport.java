@@ -107,6 +107,15 @@ public abstract class ScenarioFlowSupport {
         if (ScenarioFixtures.isBuild(prompt)) {
             return ScenarioFixtures.scenario(prompt, ScenarioFixtures.STARTER);
         }
+        if (ScenarioFixtures.isAssess(prompt)) {
+            return ScenarioFixtures.evaluation();
+        }
+        if (ScenarioFixtures.isSummary(prompt)) {
+            return ScenarioFixtures.summary();
+        }
+        if (ScenarioFixtures.isLabTeaching(prompt)) {
+            return ScenarioFixtures.labTeaching(prompt);
+        }
         return reviewAnswer(prompt);
     }
 

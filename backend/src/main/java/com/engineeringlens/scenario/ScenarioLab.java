@@ -136,7 +136,25 @@ public class ScenarioLab {
     /** The assessment is saved: the workspace closes and the lab becomes history. */
     public void complete() {
         requireStatus(ScenarioLabStatus.FINALIZING);
+        errorCode = null;
+        errorMessage = null;
         close(ScenarioLabStatus.COMPLETED);
+    }
+
+    /**
+     * Writing the final assessment failed (e.g. no AI model available). Every submission is safe, so the lab
+     * stays FINALIZING with the reason, and finalising can be retried.
+     */
+    public void finalizationFailed(String code, String userMessage) {
+        requireStatus(ScenarioLabStatus.FINALIZING);
+        errorCode = code;
+        errorMessage = userMessage == null || userMessage.length() <= 300 ? userMessage : userMessage.substring(0, 300);
+    }
+
+    public void retryFinalization() {
+        requireStatus(ScenarioLabStatus.FINALIZING);
+        errorCode = null;
+        errorMessage = null;
     }
 
     public void fail(String code, String userMessage) {

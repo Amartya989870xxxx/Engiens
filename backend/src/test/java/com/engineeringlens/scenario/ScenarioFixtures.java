@@ -121,6 +121,55 @@ public final class ScenarioFixtures {
         return s.toString();
     }
 
+    public static boolean isAssess(AiPrompt p) {
+        return p.system().contains("evaluating how a developer solved an engineering scenario");
+    }
+
+    public static boolean isSummary(AiPrompt p) {
+        return p.system().contains("overall assessment of an engineering scenario lab");
+    }
+
+    public static boolean isLabTeaching(AiPrompt p) {
+        return p.system().contains("after their scenario lab was assessed");
+    }
+
+    public static String evaluation() {
+        return """
+                {"scenarioEvaluationSchemaVersion":1,"verdict":"SOLID","confidence":"MEDIUM",
+                 "assessment":"The fix prevents duplicates for sequential retries.",
+                 "whatWasCorrect":["Checks for an existing order before storing"],"whatWasMissed":["Concurrent requests can still race"],
+                 "rootCause":"Order creation is not idempotent.","engineeringJudgment":"Sound for one process.",
+                 "tradeoffs":["A list scan is O(n)"],"scaleImpact":"Needs a unique constraint at the database under load.",
+                 "regressionRisk":"Low: normal orders are unaffected.","testingAssessment":"Add a concurrent retry test.",
+                 "recommendedFix":"Enforce uniqueness where the data lives.","referenceApproach":"Idempotency key plus unique index."}""";
+    }
+
+    public static String summary() {
+        return """
+                {"labSummarySchemaVersion":1,
+                 "overallAssessment":{"summary":"Consistent, correct fixes with gaps under concurrency.",
+                                      "engineeringLevel":"Meets SDE2 expectations on correctness; developing on concurrency.","confidence":"MEDIUM"},
+                 "strengths":["Correct fixes"],"growthAreas":["Concurrency"],"limitations":["Five scenarios is a small sample"]}""";
+    }
+
+    /** Learning points for every scenario id the prompt mentions. */
+    public static String labTeaching(AiPrompt prompt) {
+        Matcher ids = Pattern.compile("\"scenarioId\":\"([0-9a-f-]{36})\"").matcher(prompt.user());
+        ObjectNode t = JSON.createObjectNode();
+        ArrayNode learning = t.putArray("scenarioLearning");
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        while (ids.find()) {
+            if (seen.add(ids.group(1))) {
+                ObjectNode l = learning.addObject();
+                l.put("scenarioId", ids.group(1));
+                l.putArray("learningPoints").add("Learn how unique constraints make retries safe");
+            }
+        }
+        t.putArray("learningRecommendations").addObject().put("topic", "Idempotency").put("why", "Retries are everywhere")
+                .put("connectionToProject", "Checkout in app/services/orders.py");
+        return t.toString();
+    }
+
     /** The sandbox's verdict: "ignores a repeated request" fails until the code is fixed. */
     public static ExecutionResult judge(ExecutionRequest request) {
         boolean fixed = request.files().values().stream().anyMatch(v -> v.contains("# FIXED"));
