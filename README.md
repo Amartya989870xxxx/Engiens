@@ -2,7 +2,7 @@
 
 A developer-learning platform: build an engineering profile, get a personalized review of your GitHub repository, and practice production/scaling scenarios.
 
-**Current status:** registration, engineering profile, GitHub repository import (public and private via a GitHub App), repository analysis and AI engineering reviews are working. Scenario Lab and progress tracking are in progress.
+**Current status:** registration, engineering profile, GitHub repository import (public and private via a GitHub App), repository analysis, AI engineering reviews, Scenario Lab (repository-specific scenarios with sandboxed code execution and AI evaluation) and PDF export are working. Progress tracking and deployment are next.
 
 ## Stack
 
@@ -25,6 +25,7 @@ cd frontend && cp .env.example .env && npm install && npm run dev   # UI on :517
 Or, after the one-time `.env` setup, use the Makefile (run each in its own terminal):
 
 ```bash
+make sandbox-images  # once: pulls the Scenario Lab code sandbox images
 make backend    # starts PostgreSQL, then the API on :8080
 make frontend   # installs deps if needed, then the UI on :5173
 make test       # backend + frontend tests
@@ -33,6 +34,14 @@ make stop       # stops PostgreSQL
 
 The backend reads its configuration from environment variables (or the root `.env`). Nothing secret is committed.
 `GITHUB_TOKEN` is optional: without it, GitHub allows 60 profile lookups per hour from the server's IP.
+
+## Scenario Lab code sandbox
+
+Scenario Lab runs user code only inside throwaway Docker containers: no network, no host folders, no environment
+variables or secrets, a read-only image, an unprivileged user, and limits on memory, CPU, processes and time. The
+backend needs Docker on the same machine (`make sandbox-images` pulls the Python, Node and Java images once).
+Without Docker, or with `SCENARIO_EXECUTION_ENABLED=false`, Run is unavailable and labs fall back to approach-only
+scenarios. `SCENARIO_EXECUTION_MAX_CONCURRENT` (default 2) limits sandboxes running at once.
 
 ## GitHub App (private repositories, optional)
 
@@ -71,7 +80,9 @@ Modular monolith (`backend/src/main/java/com/engineeringlens`):
 | `analysis` | review preparation without AI: profiler, deterministic rules, context builder (`/api/repositories/{id}/analyses`) |
 | `analysis.ai` | provider-neutral AI layer: Gemini and Groq providers, model router with retries, fallback and per-model cooldowns |
 | `analysis.review` | AI engineering review: rubric, prompt, output validation, background runs, persistence (`/api/repositories/{id}/reviews`, `/api/reviews`) |
-| `common` | shared error model and global exception handler        |
+| `scenario` | Scenario Lab: lab lifecycle (`lab`), generation and harness validation (`generation`), sandbox (`execution`), workspace/run/submit (`workspace`), evaluation (`evaluation`), history (`history`) |
+| `export` | server-side PDFs of reviews and lab assessments, from persisted data |
+| `common` | shared error model, global exception handler, PDF typesetting |
 
 Controllers stay thin, business rules live in services, DTOs are used at the API boundary, and every failure returns the same `ApiError` JSON shape. Schema changes go through Flyway migrations in `src/main/resources/db/migration`.
 
