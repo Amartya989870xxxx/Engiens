@@ -1,4 +1,4 @@
-# Engineering Lens
+# Engiens
 
 A developer-learning platform: build an engineering profile, get a personalized review of your GitHub repository, and practice production/scaling scenarios.
 
