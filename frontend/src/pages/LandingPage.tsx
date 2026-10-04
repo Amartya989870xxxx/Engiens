@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { BRAND } from '../brand'
 
-/** The eight review dimensions from the product's rubric (CLAUDE.md §4). */
+/** The eight review dimensions from the product's review rubric. */
 const DIMENSIONS = [
   { name: 'Code Quality', tags: ['Readability', 'Naming'], looksAt: 'Readability, naming, duplicated logic, and functions that try to do too much.' },
   { name: 'Architecture', tags: ['Layers', 'Coupling'], looksAt: 'Separation of concerns, which way dependencies point, and where business logic lives.' },

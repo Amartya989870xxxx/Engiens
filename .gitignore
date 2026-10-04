@@ -10,3 +10,8 @@ dist/
 # GitHub App private key and other local secrets
 *.pem
 secrets/
+
+# Local notes and assistant files (not part of the submission)
+docs/
+CLAUDE.md
+.claude/

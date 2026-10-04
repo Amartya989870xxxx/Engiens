@@ -1,8 +1,8 @@
 # Engineering Lens
 
-A developer-learning platform: build an engineering profile, get a personalized review of your GitHub repository, and practice production/scaling scenarios. See [CLAUDE.md](CLAUDE.md) for the full project specification and [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md) for a detailed guide to what's built and how it works.
+A developer-learning platform: build an engineering profile, get a personalized review of your GitHub repository, and practice production/scaling scenarios.
 
-**Current status:** foundation + `register → login → profile → dashboard` is working. Repository import, analysis, Scenario Lab and progress follow the phases in `CLAUDE.md`.
+**Current status:** registration, engineering profile, GitHub repository import (public and private via a GitHub App), repository analysis and AI engineering reviews are working. Scenario Lab and progress tracking are in progress.
 
 ## Stack
 
