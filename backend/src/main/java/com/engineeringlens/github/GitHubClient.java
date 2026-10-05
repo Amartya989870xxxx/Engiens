@@ -1,8 +1,11 @@
 package com.engineeringlens.github;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -27,8 +30,14 @@ public class GitHubClient {
 
     static final String RAW_URL = "https://raw.githubusercontent.com";
 
+    /** How long the raw host is skipped after it failed, so each file doesn't wait out its own timeout. */
+    static final Duration RAW_HOST_COOL_OFF = Duration.ofMinutes(5);
+
+    private static final Logger log = LoggerFactory.getLogger(GitHubClient.class);
+
     private final RestClient http;
     private final String rawUrl;
+    private volatile long rawHostSkippedUntil;
 
     @Autowired
     public GitHubClient(@Value("${app.github.api-url:https://api.github.com}") String apiUrl,
@@ -146,17 +155,56 @@ public class GitHubClient {
      * Raw bytes of one file at a pinned commit. Public repositories are read from
      * raw.githubusercontent.com, which doesn't count against the REST API's hourly limit;
      * private ones through the contents API with the installation token.
+     *
+     * <p>If the raw host can't be reached (timeout, refused connection) or answers with a 5xx, the same
+     * file at the same commit is read through the contents API instead, which carries the server's
+     * GITHUB_TOKEN when one is set. A missing file (404) or a rate limit (403/429) is a real answer, not an
+     * outage, so it is reported as is. After an outage the raw host is skipped for a few minutes, so a
+     * broken host costs one connect timeout rather than one per file. Callers still check every file's
+     * SHA-256 against the manifest, whichever path served it.
      */
     public byte[] getRawFile(String owner, String name, String commitSha, String path, String accessToken) {
         String[] segments = path.split("/");
-        RestClient.RequestHeadersSpec<?> request = accessToken == null
-                ? http.get().uri(UriComponentsBuilder.fromUriString(rawUrl)
-                        .pathSegment(owner, name, commitSha).pathSegment(segments).build().encode().toUri())
-                        .accept(MediaType.ALL)
-                : withToken(http.get().uri(b -> b.pathSegment("repos", owner, name, "contents").pathSegment(segments)
-                        .queryParam("ref", commitSha).build()), accessToken)
-                        .accept(MediaType.parseMediaType("application/vnd.github.raw"));
-        return call(() -> request.retrieve()
+        if (accessToken == null && rawHostUsable()) {
+            try {
+                return getFromRawHost(owner, name, commitSha, segments);
+            } catch (RawHostUnavailable e) {
+                rawHostSkippedUntil = System.nanoTime() + RAW_HOST_COOL_OFF.toNanos();
+                log.warn("Raw file host failed for {}/{} {} ({}); reading it through the GitHub API instead",
+                        owner, name, path, e.getMessage());
+            }
+        }
+        return getFromContentsApi(owner, name, commitSha, segments, accessToken);
+    }
+
+    private boolean rawHostUsable() {
+        long skippedUntil = rawHostSkippedUntil;
+        return skippedUntil == 0 || System.nanoTime() - skippedUntil >= 0;
+    }
+
+    private byte[] getFromRawHost(String owner, String name, String commitSha, String[] segments) {
+        try {
+            return fileBody(http.get().uri(UriComponentsBuilder.fromUriString(rawUrl)
+                    .pathSegment(owner, name, commitSha).pathSegment(segments).build().encode().toUri())
+                    .accept(MediaType.ALL)
+                    .retrieve()
+                    .onStatus(s -> s.is5xxServerError(), (req, res) -> {
+                        throw new RawHostUnavailable("HTTP " + res.getStatusCode().value());
+                    }));
+        } catch (ResourceAccessException e) {
+            throw new RawHostUnavailable(e.getCause() == null ? "network error" : e.getCause().getClass().getSimpleName());
+        }
+    }
+
+    private byte[] getFromContentsApi(String owner, String name, String commitSha, String[] segments, String accessToken) {
+        return call(() -> fileBody(withToken(http.get().uri(b -> b.pathSegment("repos", owner, name, "contents").pathSegment(segments)
+                .queryParam("ref", commitSha).build()), accessToken)
+                .accept(MediaType.parseMediaType("application/vnd.github.raw"))
+                .retrieve()));
+    }
+
+    private static byte[] fileBody(RestClient.ResponseSpec response) {
+        byte[] body = response
                 .onStatus(s -> s.value() == 404, (req, res) -> {
                     throw new ApiException(HttpStatus.NOT_FOUND, "SOURCE_FILE_NOT_FOUND", "File not found at the imported commit");
                 })
@@ -166,7 +214,18 @@ public class GitHubClient {
                 .onStatus(s -> s.isError(), (req, res) -> {
                     throw GitHubHttp.unavailable();
                 })
-                .body(byte[].class));
+                .body(byte[].class);
+        if (body == null) {
+            throw GitHubHttp.unavailable();
+        }
+        return body;
+    }
+
+    /** The raw host is down or broken; the contents API may still work. Never leaves this class. */
+    private static final class RawHostUnavailable extends RuntimeException {
+        RawHostUnavailable(String reason) {
+            super(reason, null, false, false);
+        }
     }
 
     static ApiException repositoryEmpty() {
