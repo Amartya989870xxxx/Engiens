@@ -60,6 +60,12 @@ How it stays safe: the redirect carries a random single-use `state` stored serve
 the backend only accepts an installation that GitHub confirms the signed-in user can access; only the installation
 id is stored, and short-lived access tokens are minted per request and never persisted.
 
+## Deployment
+
+Production runs at zero cost: the frontend on Vercel, and the backend, PostgreSQL and the Docker sandbox on one
+Oracle Cloud Always Free ARM64 VM behind Caddy (HTTPS). Files and the step-by-step runbook are in
+[`deploy/`](deploy/README.md).
+
 ## Tests
 
 ```bash

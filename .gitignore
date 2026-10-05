@@ -15,3 +15,6 @@ secrets/
 docs/
 CLAUDE.md
 .claude/
+
+# Production database dumps (deploy/backup.sh)
+deploy/backups/
