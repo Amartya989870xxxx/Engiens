@@ -18,4 +18,9 @@ public interface ScenarioLabRepository extends JpaRepository<ScenarioLab, UUID> 
     List<ScenarioLab> findByRepositoryIdAndUserIdAndStatusOrderByCompletedAtDesc(UUID repositoryId, UUID userId, ScenarioLabStatus status);
 
     List<ScenarioLab> findByStatusIn(Collection<ScenarioLabStatus> statuses);
+
+    /** Progress evidence: the user's newest completed labs, across repositories or in one. */
+    List<ScenarioLab> findTop50ByUserIdAndStatusOrderByCompletedAtDesc(UUID userId, ScenarioLabStatus status);
+
+    List<ScenarioLab> findTop50ByUserIdAndRepositoryIdAndStatusOrderByCompletedAtDesc(UUID userId, UUID repositoryId, ScenarioLabStatus status);
 }

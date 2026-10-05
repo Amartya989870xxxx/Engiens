@@ -32,6 +32,10 @@ public class StoredReview {
         this.createdAt = Instant.now();
     }
 
+    public UUID getReviewRunId() {
+        return reviewRunId;
+    }
+
     public String getReviewJson() {
         return reviewJson;
     }

@@ -17,5 +17,7 @@ public interface ScenarioAttemptRepository extends JpaRepository<ScenarioAttempt
 
     List<ScenarioAttempt> findByEvaluationStatus(EvaluationStatus status);
 
+    List<ScenarioAttempt> findByLabIdInOrderByCreatedAtAsc(Collection<UUID> labIds);
+
     long countByLabIdAndEvaluationStatusIn(UUID labId, Collection<EvaluationStatus> statuses);
 }
