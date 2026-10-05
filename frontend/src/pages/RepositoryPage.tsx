@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, getRepository, type ImportedRepository, type LabelCount } from '../api'
+import { CommitSync } from '../repositories/CommitSync'
 import { ReviewActions } from '../repositories/ReviewActions'
 import { ReviewPreparation } from '../repositories/ReviewPreparation'
 import { useImportRepository } from '../repositories/useImportRepository'
@@ -63,6 +64,7 @@ function Overview({ repo }: { repo: ImportedRepository }) {
       >
         Progress for this repository
       </Link>
+      {repo.status === 'READY' && <CommitSync repo={repo} />}
 
       <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-6 sm:grid-cols-5">
         <Fact label="Language">{repo.primaryLanguage ?? 'Not detected'}</Fact>

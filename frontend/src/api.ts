@@ -133,6 +133,13 @@ export const getRepository = (id: string) => api<ImportedRepository>(`/api/repos
 
 export const getRepositories = () => api<RepositoryListItem[]>('/api/repositories')
 
+/** Moves the repository to its default branch's latest commit, if it has moved. Earlier reviews keep their commit. */
+export const syncRepository = (id: string) =>
+  api<{ repository: ImportedRepository; changed: boolean; previousCommit: string | null }>(
+    `/api/repositories/${encodeURIComponent(id)}/sync`,
+    { method: 'POST' },
+  )
+
 export type Detection = { name: string; confidence: 'HIGH' | 'MEDIUM' | 'LOW'; evidence: string[] }
 
 /** One "prepare for review" run: profile → deterministic signals → context. No AI involved. */
