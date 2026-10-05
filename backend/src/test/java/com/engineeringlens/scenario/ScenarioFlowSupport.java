@@ -142,7 +142,16 @@ public abstract class ScenarioFlowSupport {
         List<GitHubTree.Entry> entries = new ArrayList<>();
         FILES.keySet().stream().sorted().forEach(p -> entries.add(new GitHubTree.Entry(p, "blob", (long) FILES.get(p).length())));
         when(github.readSnapshot(remote)).thenReturn(new RepositorySnapshot(COMMIT, new GitHubTree(false, entries)));
-        when(sources.open(any(), eq(owner), any(), eq("main"), anyBoolean(), eq(COMMIT))).thenAnswer(inv -> snapshot());
+        when(sources.open(any(), eq(owner), any(), eq("main"), anyBoolean(), eq(COMMIT))).thenAnswer(inv -> snapshot(COMMIT));
+    }
+
+    /** New commits were pushed: GitHub now reports {@code commit} as the branch head, and files are read at it. */
+    protected void moveBranch(String owner, String name, String commit) {
+        RemoteRepository remote = github.read(null, owner, name);
+        List<GitHubTree.Entry> entries = new ArrayList<>();
+        FILES.keySet().stream().sorted().forEach(p -> entries.add(new GitHubTree.Entry(p, "blob", (long) FILES.get(p).length())));
+        when(github.readSnapshot(remote)).thenReturn(new RepositorySnapshot(commit, new GitHubTree(false, entries)));
+        when(sources.open(any(), eq(owner), any(), eq("main"), anyBoolean(), eq(commit))).thenAnswer(inv -> snapshot(commit));
     }
 
     protected String importRepo(String auth, String owner, String name) throws Exception {
@@ -170,11 +179,11 @@ public abstract class ScenarioFlowSupport {
         return JsonPath.read(body, "$.id");
     }
 
-    private static SourceSnapshot snapshot() {
+    private static SourceSnapshot snapshot(String commit) {
         return new SourceSnapshot() {
             @Override
             public String commitSha() {
-                return COMMIT;
+                return commit;
             }
 
             @Override

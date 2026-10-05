@@ -41,13 +41,45 @@ public class RepositoryImportService {
     private final ImportedRepoRepository repositories;
     private final RepoFileRepository files;
     private final TransactionTemplate transaction;
+    private final List<RepositoryWorkGuard> guards;
 
     public RepositoryImportService(GitHubRepositoryReader github, ImportedRepoRepository repositories,
-            RepoFileRepository files, PlatformTransactionManager transactionManager) {
+            RepoFileRepository files, PlatformTransactionManager transactionManager, List<RepositoryWorkGuard> guards) {
         this.github = github;
         this.repositories = repositories;
         this.files = files;
         this.transaction = new TransactionTemplate(transactionManager);
+        this.guards = guards;
+    }
+
+    /**
+     * Moves an imported repository to the current commit of its default branch, so the next preparation and review read
+     * the new code. Earlier analyses, reviews and labs keep the commit they were pinned to, which is what lets Progress
+     * compare the project before and after. Nothing changes when the branch hasn't moved. Refused while work on this
+     * repository is running, so nothing reads a half-replaced inventory.
+     */
+    public RepositorySyncResponse sync(UUID userId, UUID repositoryId) {
+        ImportedRepo repo = repositories.findByIdAndUserId(repositoryId, userId).orElseThrow(RepositoryImportService::notFound);
+        if (repo.getStatus() != RepositoryStatus.READY) {
+            throw new ApiException(HttpStatus.CONFLICT, "REPOSITORY_NOT_READY", "Import the repository successfully before checking for new commits.");
+        }
+        if (guards.stream().anyMatch(g -> g.busy(repo.getId()))) {
+            throw new ApiException(HttpStatus.CONFLICT, "REPOSITORY_BUSY",
+                    "A preparation, review or Scenario Lab is in progress for this repository. Check for new commits when it has finished.");
+        }
+        RemoteRepository remote = github.read(userId, repo.getGithubOwner(), repo.getGithubRepoName());
+        RepositorySnapshot snapshot = github.readSnapshot(remote);
+        String previous = repo.getCommitSha();
+        if (snapshot.commitSha().equals(previous)) {
+            return new RepositorySyncResponse(toResponse(repo), false, previous);
+        }
+        List<FileClassifier.Classification> inventory = classify(snapshot.tree()); // may refuse; the old snapshot then stays
+        GitHubRepoDetails d = remote.details();
+        repo.refreshMetadata(d.description(), d.defaultBranch(), d.language(),
+                d.privateRepo() ? RepositoryVisibility.PRIVATE : RepositoryVisibility.PUBLIC, d.stars(), d.forks());
+        saveInventory(repo, snapshot.commitSha(), inventory);
+        log.info("Repository moved to a new commit: repository={} from={} to={}", repo.getId(), previous, snapshot.commitSha());
+        return new RepositorySyncResponse(toResponse(repo), true, previous);
     }
 
     public RepositoryResponse importRepository(UUID userId, String url) {

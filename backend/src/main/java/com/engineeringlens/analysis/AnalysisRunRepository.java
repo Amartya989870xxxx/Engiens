@@ -1,5 +1,6 @@
 package com.engineeringlens.analysis;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,6 +11,8 @@ public interface AnalysisRunRepository extends JpaRepository<AnalysisRun, UUID> 
     Optional<AnalysisRun> findByIdAndUserId(UUID id, UUID userId);
 
     Optional<AnalysisRun> findFirstByRepositoryIdOrderByCreatedAtDesc(UUID repositoryId);
+
+    boolean existsByRepositoryIdAndStatusIn(UUID repositoryId, Collection<AnalysisRunStatus> statuses);
 
     /** A finished run of the same snapshot with the same versions and limits: its output would be identical. */
     Optional<AnalysisRun> findFirstByRepositoryIdAndStatusAndCommitShaAndProfileSchemaVersionAndRulesVersionAndContextSchemaVersionAndConfigFingerprintOrderByCreatedAtDesc(

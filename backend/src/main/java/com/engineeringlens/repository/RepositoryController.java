@@ -40,6 +40,12 @@ public class RepositoryController {
         return service.get(userId(jwt), id);
     }
 
+    /** Moves the repository to its default branch's current commit, if it has moved. */
+    @PostMapping("/{id}/sync")
+    RepositorySyncResponse sync(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return service.sync(userId(jwt), id);
+    }
+
     private static UUID userId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
     }

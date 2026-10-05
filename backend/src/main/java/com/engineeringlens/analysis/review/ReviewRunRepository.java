@@ -26,6 +26,8 @@ public interface ReviewRunRepository extends JpaRepository<ReviewRun, UUID> {
 
     List<ReviewRun> findByStatusIn(Collection<ReviewRunStatus> statuses);
 
+    boolean existsByRepositoryIdAndStatusIn(UUID repositoryId, Collection<ReviewRunStatus> statuses);
+
     /** Progress evidence: the user's newest finished reviews, across repositories or in one. */
     List<ReviewRun> findTop50ByUserIdAndStatusOrderByCompletedAtDesc(UUID userId, ReviewRunStatus status);
 

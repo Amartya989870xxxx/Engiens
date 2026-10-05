@@ -107,6 +107,17 @@ public class ImportedRepo {
         this.updatedAt = Instant.now();
     }
 
+    /** GitHub's current metadata for an already-imported repository; the import status is unchanged. */
+    public void refreshMetadata(String description, String defaultBranch, String primaryLanguage, RepositoryVisibility visibility,
+            int stars, int forks) {
+        this.description = description == null || description.length() <= 1000 ? description : description.substring(0, 1000);
+        this.defaultBranch = defaultBranch;
+        this.primaryLanguage = primaryLanguage;
+        this.visibility = visibility;
+        this.stars = stars;
+        this.forks = forks;
+    }
+
     public void markReady(String commitSha, int fileCount, int relevantFileCount, int ignoredFileCount) {
         this.commitSha = commitSha;
         this.fileCount = fileCount;
