@@ -76,7 +76,7 @@ Modular monolith (`backend/src/main/java/com/engineeringlens`):
 | `auth`   | registration, login, JWT issuing, security config      |
 | `user`   | users and engineering profiles                         |
 | `github` | GitHub API clients, GitHub App connection, repository reader |
-| `repository` | repository import: metadata + file inventory (`/api/repositories`) |
+| `repository` | repository import: metadata + file inventory (`/api/repositories`); moving an imported repository to its latest commit (`POST /api/repositories/{id}/sync`) so it can be reviewed again after changes |
 | `analysis` | review preparation without AI: profiler, deterministic rules, context builder (`/api/repositories/{id}/analyses`) |
 | `analysis.ai` | provider-neutral AI layer: Gemini and Groq providers, model router with retries, fallback and per-model cooldowns |
 | `analysis.review` | AI engineering review: rubric, prompt, output validation, background runs, persistence (`/api/repositories/{id}/reviews`, `/api/reviews`) |
