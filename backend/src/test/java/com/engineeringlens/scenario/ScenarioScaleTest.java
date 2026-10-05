@@ -370,9 +370,19 @@ class ScenarioScaleTest extends ScenarioFlowSupport {
     }
 
     @Test
-    void setupCanAskWhetherThePreferredModelIsAvailable() throws Exception {
+    void setupCanAskWhetherThePreferredModelAndCodeExecutionAreAvailable() throws Exception {
         setUpRepo("scale-capacity@example.com");
         mvc.perform(get("/api/scenario-labs/capacity").header("Authorization", auth))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.preferredModelAvailable").value(true));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferredModelAvailable").value(true))
+                .andExpect(jsonPath("$.codeExecutionAvailable").value(true));
+
+        // A server without Docker (e.g. a hosting platform): the setup screen is told, and labs are approach-only.
+        org.mockito.Mockito.when(sandbox.available()).thenReturn(false);
+        mvc.perform(get("/api/scenario-labs/capacity").header("Authorization", auth))
+                .andExpect(jsonPath("$.codeExecutionAvailable").value(false));
+        String labId = startLab(auth, "\"repositoryId\":\"" + repoId + "\"", 5);
+        assertThat(scenarios.findByLabIdOrderByPositionAsc(UUID.fromString(labId)))
+                .isNotEmpty().allSatisfy(sc -> assertThat(sc.getExecutionCapability()).isEqualTo(ExecutionCapability.APPROACH_ONLY));
     }
 }

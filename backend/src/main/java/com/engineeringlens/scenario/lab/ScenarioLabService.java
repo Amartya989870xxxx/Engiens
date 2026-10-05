@@ -39,6 +39,7 @@ import com.engineeringlens.scenario.ScenarioLabRepository;
 import com.engineeringlens.scenario.ScenarioLabStatus;
 import com.engineeringlens.scenario.ScenarioRepository;
 import com.engineeringlens.scenario.ScenarioRole;
+import com.engineeringlens.scenario.execution.ScenarioExecutionService;
 import com.engineeringlens.scenario.generation.ScenarioGenerationWorker;
 
 /**
@@ -63,11 +64,14 @@ public class ScenarioLabService {
     private final ScenarioGenerationWorker generation;
     private final Executor executor;
     private final com.engineeringlens.analysis.ai.AiModelRouter router;
+    private final ScenarioExecutionService execution;
 
     public ScenarioLabService(ScenarioLabRepository labs, ScenarioRepository scenarios, ScenarioAttemptRepository attempts,
             ImportedRepoRepository repositories, ReviewRunRepository reviewRuns, RepositoryImportService importer,
             AnalysisPreparationService preparation, ScenarioGenerationWorker generation, @Qualifier("scenarioExecutor") Executor executor,
-            com.engineeringlens.analysis.ai.AiModelRouter router, @Value("${app.limits.labs-per-day:5}") int labsPerDay) {
+            com.engineeringlens.analysis.ai.AiModelRouter router, ScenarioExecutionService execution,
+            @Value("${app.limits.labs-per-day:5}") int labsPerDay) {
+        this.execution = execution;
         this.labsPerDay = labsPerDay;
         this.labs = labs;
         this.scenarios = scenarios;
@@ -128,14 +132,18 @@ public class ScenarioLabService {
     }
 
     /**
-     * Whether the preferred AI model is available right now. When it isn't (e.g. a daily quota is spent), larger labs
-     * run on fallback models and take longer; the setup screen says so before the user starts one.
+     * What this server can do right now, so the setup screen can say so before the user starts a lab.
+     *
+     * @param preferredModelAvailable false when the preferred AI model is busy or out of quota: larger labs then run on
+     *                                fallback models and take longer
+     * @param codeExecutionAvailable  false when this server has no code sandbox (Docker), e.g. a hosting platform that
+     *                                can't start containers: scenarios are then answered in writing (approach-only)
      */
-    public record Capacity(boolean preferredModelAvailable) {
+    public record Capacity(boolean preferredModelAvailable, boolean codeExecutionAvailable) {
     }
 
     public Capacity capacity() {
-        return new Capacity(router.preferredModelAvailable());
+        return new Capacity(router.preferredModelAvailable(), execution.available());
     }
 
     public ScenarioLabResponse get(UUID userId, UUID labId) {

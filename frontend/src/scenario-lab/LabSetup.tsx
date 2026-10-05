@@ -163,6 +163,13 @@ export function LabSetup({ reviewId, onStarted }: { reviewId: string | null; onS
         )}
       </fieldset>
 
+      {capacity.data?.codeExecutionAvailable === false && (
+        <p role="note" className="max-w-2xl text-sm leading-relaxed text-ink">
+          Code can&rsquo;t be run on this server (it has no code sandbox), so every scenario is answered in writing: explain how
+          you&rsquo;d diagnose and fix the problem. Your answer is evaluated the same way.
+        </p>
+      )}
+
       <div className="space-y-3">
         <ErrorBanner error={start.error} />
         <Button type="submit" busy={start.isPending}>

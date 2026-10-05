@@ -529,7 +529,9 @@ export const createLab = (request: CreateLabRequest) => api<ScenarioLab>('/api/s
 export const getActiveLab = async () => (await api<ScenarioLab | undefined>('/api/scenario-labs/active')) ?? null
 export const getLab = (labId: string) => api<ScenarioLab>(lab(labId))
 /** Whether the preferred AI model is available now; when not, larger labs take longer. */
-export const getLabCapacity = () => api<{ preferredModelAvailable: boolean }>('/api/scenario-labs/capacity')
+/** What this server can do now: the preferred AI model, and whether code can be run (needs the Docker sandbox). */
+export const getLabCapacity = () =>
+  api<{ preferredModelAvailable: boolean; codeExecutionAvailable?: boolean }>('/api/scenario-labs/capacity')
 export const cancelLab = (labId: string) => api<ScenarioLab>(`${lab(labId)}/cancel`, { method: 'POST' })
 export const retryFinalization = (labId: string) => api<void>(`${lab(labId)}/finalize`, { method: 'POST' })
 export const getScenario = (labId: string, scenarioId: string) => api<ScenarioDetail>(scenario(labId, scenarioId))

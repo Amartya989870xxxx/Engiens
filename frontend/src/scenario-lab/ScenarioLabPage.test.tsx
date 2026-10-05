@@ -233,3 +233,16 @@ test('setup warns honestly when larger labs would run on fallback models', async
   await user.click(screen.getByRole('radio', { name: /^5/ }))
   expect(screen.queryByRole('note')).not.toBeInTheDocument()
 })
+
+test('setup says so when this server cannot run code, so labs will be answered in writing', async () => {
+  serve(empty, { '/api/scenario-labs/capacity': () => json({ preferredModelAvailable: true, codeExecutionAvailable: false }) })
+  renderAt('/scenario-lab')
+  expect(await screen.findByRole('note')).toHaveTextContent('Code can’t be run on this server (it has no code sandbox)')
+})
+
+test('no sandbox note when code execution is available', async () => {
+  serve(empty, { '/api/scenario-labs/capacity': () => json({ preferredModelAvailable: true, codeExecutionAvailable: true }) })
+  renderAt('/scenario-lab')
+  await screen.findByRole('heading', { name: /Test your engineering judgement/ })
+  expect(screen.queryByRole('note')).not.toBeInTheDocument()
+})
