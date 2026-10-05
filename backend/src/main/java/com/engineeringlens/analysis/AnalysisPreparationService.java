@@ -1,5 +1,6 @@
 package com.engineeringlens.analysis;
 
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,8 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -196,6 +199,21 @@ public class AnalysisPreparationService {
 
     private DeveloperProfile developer(UUID userId) {
         return profiles.findById(userId).map(DeveloperProfile::from).orElse(null);
+    }
+
+    /**
+     * Preparation runs inside the request, so one still marked as running when the server stopped will never finish.
+     * Left as it was, it would also make the repository look busy forever (commit sync waits for running work).
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void failInterruptedPreparations() {
+        List<AnalysisRun> stuck = runs.findByStatusIn(EnumSet.of(AnalysisRunStatus.QUEUED, AnalysisRunStatus.RUNNING));
+        for (AnalysisRun run : stuck) {
+            fail(run, "Preparing this repository was interrupted by a server restart. Please prepare it again.");
+        }
+        if (!stuck.isEmpty()) {
+            log.warn("Marked {} interrupted preparation(s) as failed after restart", stuck.size());
+        }
     }
 
     private void fail(AnalysisRun run, String reason) {

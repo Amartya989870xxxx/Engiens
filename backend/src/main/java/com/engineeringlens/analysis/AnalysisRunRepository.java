@@ -1,6 +1,7 @@
 package com.engineeringlens.analysis;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,6 +12,8 @@ public interface AnalysisRunRepository extends JpaRepository<AnalysisRun, UUID> 
     Optional<AnalysisRun> findByIdAndUserId(UUID id, UUID userId);
 
     Optional<AnalysisRun> findFirstByRepositoryIdOrderByCreatedAtDesc(UUID repositoryId);
+
+    List<AnalysisRun> findByStatusIn(Collection<AnalysisRunStatus> statuses);
 
     boolean existsByRepositoryIdAndStatusIn(UUID repositoryId, Collection<AnalysisRunStatus> statuses);
 

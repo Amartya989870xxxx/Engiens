@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.engineeringlens.analysis.AnalysisPreparationService;
 import com.engineeringlens.analysis.review.ReviewRun;
 import com.engineeringlens.analysis.review.ReviewRunRepository;
 import com.engineeringlens.analysis.review.ReviewRunStatus;
@@ -33,6 +34,9 @@ class ProjectChangeFlowTest extends ScenarioFlowSupport {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    AnalysisPreparationService preparation;
 
     @Test
     void aReviewAtANewerCommitIsAProjectLevelChangeWithBothReviewsAsEvidence() throws Exception {
@@ -76,6 +80,25 @@ class ProjectChangeFlowTest extends ScenarioFlowSupport {
         assertThat(JsonPath.<List<String>>read(body, area + ".evidence[*].reviewId")).containsExactly(after, before);
         assertThat(JsonPath.<List<String>>read(body, area + ".evidence[*].commitSha")).containsExactly(LATER, COMMIT);
         assertThat(JsonPath.<List<Boolean>>read(body, area + ".evidence[*].counted")).containsExactly(true, true);
+    }
+
+    /** A preparation cut off by a restart must not leave the repository looking busy forever. */
+    @Test
+    void aPreparationInterruptedByARestartIsFailedAndNoLongerBlocksCheckingForNewCommits() throws Exception {
+        String auth = register("change-restart@example.com");
+        String repoId = importRepo(auth, "asha", "orders");
+        review(auth, repoId);
+        jdbc.update("UPDATE analysis_runs SET status = 'RUNNING' WHERE repository_id = ?", UUID.fromString(repoId));
+        moveBranch("asha", "orders", LATER);
+        mvc.perform(post("/api/repositories/" + repoId + "/sync").header("Authorization", auth))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REPOSITORY_BUSY"));
+
+        preparation.failInterruptedPreparations(); // what happens when the server starts again
+
+        assertThat(jdbc.queryForObject("SELECT status FROM analysis_runs WHERE repository_id = ?", String.class, UUID.fromString(repoId)))
+                .isEqualTo("FAILED");
+        mvc.perform(post("/api/repositories/" + repoId + "/sync").header("Authorization", auth))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.changed").value(true));
     }
 
     @Test
