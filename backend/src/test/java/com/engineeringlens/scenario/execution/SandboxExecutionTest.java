@@ -99,6 +99,15 @@ class SandboxExecutionTest {
                     except OSError:
                         pass
 
+                @check("the app's database is out of reach")
+                def _():
+                    for host in ("host.docker.internal", "172.17.0.1", "postgres", "localhost"):
+                        try:
+                            socket.create_connection((host, 5432), timeout=2)
+                            raise AssertionError("reached a database at " + host)
+                        except OSError:
+                            pass
+
                 @check("no secrets or host files")
                 def _():
                     for name in ("JWT_SECRET", "GEMINI_API_KEY", "GROQ_API_KEY", "DB_PASSWORD", "GITHUB_APP_CLIENT_SECRET"):
