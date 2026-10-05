@@ -1,5 +1,5 @@
 import { Logo } from './Logo'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, getRecentReviews, getRepositories, type Profile } from '../api'
@@ -82,7 +82,17 @@ function Sidebar({ onClose }: { onClose: () => void }) {
           <FlaskIcon />
           Scenario Lab
         </NavLink>
-        <SoonItem icon={<ChartIcon />} label="Progress" />
+        <NavLink
+          to="/progress"
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-white ${
+              isActive ? 'bg-raised text-ink' : 'text-muted'
+            }`
+          }
+        >
+          <ChartIcon />
+          Progress
+        </NavLink>
       </nav>
 
       <RecentRepositories />
@@ -165,15 +175,6 @@ function RecentReviews() {
 }
 
 /** A navigation entry for a feature that isn't built yet: visible, but clearly not clickable. */
-function SoonItem({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <span aria-disabled className="flex items-center gap-3 px-3 py-2 text-sm text-muted/60">
-      {icon}
-      {label}
-      <span className="ml-auto rounded border border-line px-1.5 py-px text-[10px] uppercase tracking-wider">Soon</span>
-    </span>
-  )
-}
 
 function AccountMenu() {
   const { user, logout } = useAuth()

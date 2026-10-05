@@ -568,3 +568,110 @@ export async function downloadFile(path: string, fallbackName: string) {
 export const getScenarioFeedback = (labId: string, scenarioId: string) => api<ScenarioResult>(`${scenario(labId, scenarioId)}/feedback`)
 /** Finish the open lab with the scenarios submitted so far; poll the lab until it is COMPLETED. */
 export const finishLab = (labId: string) => api<void>(`${lab(labId)}/finish`, { method: 'POST' })
+
+// ---- Progress (Phase 6) ------------------------------------------------------------------------
+
+/** An evidence-based indicator for one engineering area; never a score. */
+export type ProgressIndicator =
+  | 'NOT_ASSESSED'
+  | 'NOT_ENOUGH_HISTORY'
+  | 'IMPROVING'
+  | 'RECURRING_GAP'
+  | 'CONSISTENT_STRENGTH'
+  | 'INCONSISTENT'
+  | 'MIXED'
+
+/** One stored assessment behind an indicator. REVIEW rates the code in a repository; SCENARIO rates the developer's own answer. */
+export type ProgressEvidence = {
+  source: 'REVIEW' | 'SCENARIO'
+  level: Assessment
+  confidence: Level3
+  date: string
+  repositoryId: string
+  repositoryName: string | null
+  commitSha: string | null
+  reviewId: string | null
+  labId: string | null
+  attemptId: string | null
+  category: string | null
+  scenarioTitle: string | null
+  counted: boolean
+  note: string | null
+}
+
+/** The same repository rated differently at a later commit: the project's code changed. */
+export type ProjectChange = {
+  repositoryId: string
+  repositoryName: string | null
+  from: Assessment
+  to: Assessment
+  fromCommit: string | null
+  toCommit: string | null
+  fromDate: string
+  toDate: string
+  direction: 'UP' | 'DOWN'
+}
+
+export type ProgressArea = {
+  area: string
+  name: string
+  indicator: ProgressIndicator
+  reason: string
+  projectChanges: ProjectChange[]
+  variedOnSameCode: string[]
+  evidence: ProgressEvidence[]
+}
+
+export type StoredTeaching = {
+  reviewId: string | null
+  labId: string | null
+  repositoryId: string
+  repositoryName: string | null
+  date: string
+  topics: { topic: string; why: string }[]
+}
+
+export type Progress = {
+  scope: { repositoryId: string | null; repositoryName: string | null }
+  repositories: { id: string; name: string }[]
+  evidence: {
+    reviews: number
+    repositories: number
+    labs: number
+    evaluatedAnswers: number
+    from: string | null
+    to: string | null
+    skipped: number
+    truncated: boolean
+  }
+  areas: ProgressArea[]
+  practice: {
+    categories: { category: string; area: string; answers: number; verdicts: Partial<Record<Assessment, number>> }[]
+    roles: { value: ScenarioRole; count: number }[]
+    seniorities: { value: Seniority; count: number }[]
+    weakButUnpractised: string[]
+  }
+  nextAreas: { area: string; name: string; why: string }[]
+  recommendations: { fromReview: StoredTeaching | null; fromLab: StoredTeaching | null }
+}
+
+export type ProgressHistoryItem = {
+  type: 'REVIEW' | 'LAB'
+  id: string
+  repositoryId: string
+  repositoryName: string | null
+  commitSha: string | null
+  date: string
+  overall: Assessment | null
+  roles: ScenarioRole[] | null
+  seniority: Seniority | null
+  scenariosGenerated: number | null
+  scenariosSubmitted: number | null
+}
+
+const scoped = (path: string, repositoryId: string | null, extra = '') =>
+  `${path}?${repositoryId ? `repositoryId=${encodeURIComponent(repositoryId)}&` : ''}${extra}`
+
+export const getProgress = (repositoryId: string | null) => api<Progress>(scoped('/api/progress', repositoryId))
+export const getProgressHistory = (repositoryId: string | null, page: number) =>
+  api<{ items: ProgressHistoryItem[]; page: number; hasMore: boolean }>(scoped('/api/progress/history', repositoryId, `page=${page}`))

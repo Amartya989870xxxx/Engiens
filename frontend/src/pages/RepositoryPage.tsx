@@ -57,6 +57,12 @@ function Overview({ repo }: { repo: ImportedRepository }) {
       <h1 className="mt-3 break-words font-display text-[2.75rem] leading-[1.05] tracking-[-0.015em] text-ink sm:text-6xl">{repo.name}</h1>
       {repo.description && <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-muted">{repo.description}</p>}
       <StatusLine repo={repo} />
+      <Link
+        to={`/progress?repository=${repo.id}`}
+        className="mt-3 inline-block text-xs text-muted underline underline-offset-4 transition-colors hover:text-ink"
+      >
+        Progress for this repository
+      </Link>
 
       <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-6 sm:grid-cols-5">
         <Fact label="Language">{repo.primaryLanguage ?? 'Not detected'}</Fact>
