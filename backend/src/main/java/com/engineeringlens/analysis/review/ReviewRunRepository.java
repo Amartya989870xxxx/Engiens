@@ -1,5 +1,6 @@
 package com.engineeringlens.analysis.review;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +26,9 @@ public interface ReviewRunRepository extends JpaRepository<ReviewRun, UUID> {
     Optional<ReviewRun> findFirstByAnalysisRunIdAndStatusInOrderByCreatedAtDesc(UUID analysisRunId, Collection<ReviewRunStatus> statuses);
 
     List<ReviewRun> findByStatusIn(Collection<ReviewRunStatus> statuses);
+
+    /** Reviews that spent AI quota recently (failed ones didn't), for the daily cap. */
+    List<ReviewRun> findByUserIdAndCreatedAtAfterAndStatusNotOrderByCreatedAtAsc(UUID userId, Instant after, ReviewRunStatus status);
 
     boolean existsByRepositoryIdAndStatusIn(UUID repositoryId, Collection<ReviewRunStatus> statuses);
 

@@ -1,5 +1,6 @@
 package com.engineeringlens.analysis.review;
 
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -9,6 +10,7 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.task.TaskRejectedException;
@@ -26,6 +28,7 @@ import com.engineeringlens.analysis.review.model.RubricDimension;
 import com.engineeringlens.analysis.source.RepositorySourceReader;
 import com.engineeringlens.analysis.source.RunFileCache;
 import com.engineeringlens.common.ApiException;
+import com.engineeringlens.common.DailyLimit;
 import com.engineeringlens.repository.ImportedRepo;
 import com.engineeringlens.repository.ImportedRepoRepository;
 import com.engineeringlens.repository.RepositoryStatus;
@@ -53,10 +56,13 @@ public class ReviewService {
     private final ReviewWorker worker;
     private final Executor executor;
     private final ObjectMapper json;
+    private final int reviewsPerDay;
 
     public ReviewService(ImportedRepoRepository repositories, AnalysisPreparationService preparation, ReviewRunRepository runs,
             StoredReviewRepository reviews, AnalysisArtifactRepository artifacts, RepositorySourceReader sources, ReviewWorker worker,
-            @Qualifier("reviewExecutor") Executor executor, ObjectMapper json) {
+            @Qualifier("reviewExecutor") Executor executor, ObjectMapper json,
+            @Value("${app.limits.reviews-per-day:10}") int reviewsPerDay) {
+        this.reviewsPerDay = reviewsPerDay;
         this.repositories = repositories;
         this.preparation = preparation;
         this.runs = runs;
@@ -86,6 +92,9 @@ public class ReviewService {
         if (inProgress.isPresent()) {
             return toResponse(inProgress.get(), repo, false);
         }
+        Instant now = Instant.now();
+        DailyLimit.check(runs.findByUserIdAndCreatedAtAfterAndStatusNotOrderByCreatedAtAsc(userId, now.minus(DailyLimit.WINDOW),
+                ReviewRunStatus.FAILED).stream().map(ReviewRun::getCreatedAt).toList(), reviewsPerDay, "reviews", now);
         ReviewRun run = runs.save(new ReviewRun(repo.getId(), prepared.id(), userId, prepared.commitSha(), ReviewDocument.SCHEMA_VERSION,
                 RubricDimension.RUBRIC_VERSION, prepared.contextSchemaVersion()));
         try {

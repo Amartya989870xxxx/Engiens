@@ -27,7 +27,7 @@ class ReviewWorker {
     /** What the user sees for each failure. Provider details stay in logs and model health. */
     static final Map<String, String> USER_MESSAGES = Map.of(
             AiUnavailableException.NOT_CONFIGURED, "AI review isn't set up on this server yet.",
-            AiUnavailableException.UNAVAILABLE, "No AI model is available right now. Please try again in a few minutes.",
+            AiUnavailableException.UNAVAILABLE, "No AI model is available right now. Engiens runs on free AI quotas, which may be used up for today; everything you have already done is still here. Please try again later.",
             AiUnavailableException.REQUEST_REJECTED, "The review request couldn't be processed. Please try again later.",
             "REVIEW_FAILED", "The review failed unexpectedly. Please try again.",
             "INTERRUPTED", "The review was interrupted by a server restart. Please start it again.");

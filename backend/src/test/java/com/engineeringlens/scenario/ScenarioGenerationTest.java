@@ -176,7 +176,8 @@ class ScenarioGenerationTest extends ScenarioFlowSupport {
         mvc.perform(get("/api/scenario-labs/" + labId).header("Authorization", auth))
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.errorCode").value("AI_UNAVAILABLE"))
-                .andExpect(jsonPath("$.errorMessage").value("No AI model is available right now. Please try again in a few minutes."))
+                .andExpect(jsonPath("$.errorMessage").value("No AI model is available right now. Engiens runs on free AI quotas, which may "
+                        + "be used up for today; everything you have already done is still here. Please try again later."))
                 .andExpect(jsonPath("$.scenarios.length()").value(0));
         mvc.perform(get("/api/scenario-labs/active").header("Authorization", auth)).andExpect(status().isNoContent());
 

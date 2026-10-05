@@ -71,7 +71,7 @@ public class EvaluationWorker {
 
     static final Map<String, String> USER_MESSAGES = Map.of(
             AiUnavailableException.NOT_CONFIGURED, "AI evaluation isn't set up on this server yet.",
-            AiUnavailableException.UNAVAILABLE, "No AI model is available right now. Try the evaluation again in a few minutes.",
+            AiUnavailableException.UNAVAILABLE, "No AI model is available right now. Engiens runs on free AI quotas, which may be used up for today; your submission is saved. Try the evaluation again later.",
             AiUnavailableException.REQUEST_REJECTED, "The evaluation request couldn't be processed. Please try again later.",
             "EVALUATION_FAILED", "The evaluation failed unexpectedly. Please try again.",
             "INTERRUPTED", "The evaluation was interrupted by a server restart. Please try again.");

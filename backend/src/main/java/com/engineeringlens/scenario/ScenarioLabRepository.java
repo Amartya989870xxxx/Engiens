@@ -1,5 +1,6 @@
 package com.engineeringlens.scenario;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,9 @@ public interface ScenarioLabRepository extends JpaRepository<ScenarioLab, UUID> 
     List<ScenarioLab> findByRepositoryIdAndUserIdAndStatusOrderByCompletedAtDesc(UUID repositoryId, UUID userId, ScenarioLabStatus status);
 
     List<ScenarioLab> findByStatusIn(Collection<ScenarioLabStatus> statuses);
+
+    /** Labs that spent AI quota recently (failed generations didn't), for the daily cap. */
+    List<ScenarioLab> findByUserIdAndCreatedAtAfterAndStatusNotOrderByCreatedAtAsc(UUID userId, Instant after, ScenarioLabStatus status);
 
     boolean existsByRepositoryIdAndStatusIn(UUID repositoryId, Collection<ScenarioLabStatus> statuses);
 

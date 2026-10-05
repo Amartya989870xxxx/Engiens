@@ -1,5 +1,6 @@
 package com.engineeringlens.scenario.lab;
 
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,7 @@ import com.engineeringlens.analysis.review.ReviewRun;
 import com.engineeringlens.analysis.review.ReviewRunRepository;
 import com.engineeringlens.analysis.review.ReviewRunStatus;
 import com.engineeringlens.common.ApiException;
+import com.engineeringlens.common.DailyLimit;
 import com.engineeringlens.repository.ImportedRepo;
 import com.engineeringlens.repository.ImportedRepoRepository;
 import com.engineeringlens.repository.RepositoryImportService;
@@ -50,6 +53,7 @@ public class ScenarioLabService {
     public static final Set<Integer> ALLOWED_COUNTS = Set.of(5, 10, 20);
 
     private final ScenarioLabRepository labs;
+    private final int labsPerDay;
     private final ScenarioRepository scenarios;
     private final ScenarioAttemptRepository attempts;
     private final ImportedRepoRepository repositories;
@@ -63,7 +67,8 @@ public class ScenarioLabService {
     public ScenarioLabService(ScenarioLabRepository labs, ScenarioRepository scenarios, ScenarioAttemptRepository attempts,
             ImportedRepoRepository repositories, ReviewRunRepository reviewRuns, RepositoryImportService importer,
             AnalysisPreparationService preparation, ScenarioGenerationWorker generation, @Qualifier("scenarioExecutor") Executor executor,
-            com.engineeringlens.analysis.ai.AiModelRouter router) {
+            com.engineeringlens.analysis.ai.AiModelRouter router, @Value("${app.limits.labs-per-day:5}") int labsPerDay) {
+        this.labsPerDay = labsPerDay;
         this.labs = labs;
         this.scenarios = scenarios;
         this.attempts = attempts;
@@ -95,6 +100,9 @@ public class ScenarioLabService {
         if (labs.findByActiveUserId(userId).isPresent()) {
             throw alreadyActive();
         }
+        Instant now = Instant.now();
+        DailyLimit.check(labs.findByUserIdAndCreatedAtAfterAndStatusNotOrderByCreatedAtAsc(userId, now.minus(DailyLimit.WINDOW),
+                ScenarioLabStatus.FAILED).stream().map(ScenarioLab::getCreatedAt).toList(), labsPerDay, "Scenario Labs", now);
 
         Source source = request.reviewId() != null ? fromReview(userId, request.reviewId())
                 : fromRepository(userId, request.repositoryId() != null ? request.repositoryId()
