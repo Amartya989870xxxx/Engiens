@@ -19,14 +19,19 @@ public record ScenarioPlan(@NotNull Integer scenarioPlanSchemaVersion, @NotBlank
 
     public static final int SCHEMA_VERSION = 1;
 
+    /**
+     * @param role            the primary role the scenario is written for
+     * @param applicableRoles other selected roles it genuinely involves (a cross-boundary problem), or null
+     */
     public record Outline(@NotBlank String key, @NotBlank @Size(max = 200) String title, @NotNull ScenarioRole role,
+            List<@NotNull ScenarioRole> applicableRoles,
             @NotNull ScenarioCategory category, @NotNull ScenarioDifficulty difficulty, @NotNull ExecutionCapability mode,
             ScenarioLanguage language, @NotBlank String problem, @NotNull @Size(min = 1) List<@Valid @NotNull Grounding> groundedIn,
             @NotNull List<@NotBlank String> expectedConcepts, @NotBlank String whyItFitsTheLevel) {
 
         Outline withMode(ExecutionCapability newMode, ScenarioLanguage newLanguage) {
-            return new Outline(key, title, role, category, difficulty, newMode, newLanguage, problem, groundedIn, expectedConcepts,
-                    whyItFitsTheLevel);
+            return new Outline(key, title, role, applicableRoles, category, difficulty, newMode, newLanguage, problem, groundedIn,
+                    expectedConcepts, whyItFitsTheLevel);
         }
     }
 

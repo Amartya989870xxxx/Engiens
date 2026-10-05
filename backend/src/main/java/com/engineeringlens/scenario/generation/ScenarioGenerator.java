@@ -10,6 +10,7 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import com.engineeringlens.analysis.ai.AiGenerationSettings;
@@ -17,6 +18,7 @@ import com.engineeringlens.analysis.ai.AiModelRouter;
 import com.engineeringlens.analysis.ai.AiPrompt;
 import com.engineeringlens.analysis.ai.AiProperties;
 import com.engineeringlens.analysis.ai.AiUnavailableException;
+import com.engineeringlens.common.ApiException;
 import com.engineeringlens.scenario.ExecutionCapability;
 import com.engineeringlens.scenario.ScenarioLab;
 import com.engineeringlens.scenario.execution.ScenarioExecutionService;
@@ -26,7 +28,7 @@ import com.engineeringlens.scenario.model.ScenarioValidation;
 /**
  * Generates a lab's scenarios: plan once over the selected context, then build each scenario from only its
  * own files, validate it, and (for executable ones) prove its harness in the sandbox. A scenario that can't
- * be proven gets one repair; if it still fails, a spare outline takes its place; only when spares run out
+ * be proven gets its repairs ({@link GenerationProperties#harnessRepairs()}); if it still fails, a spare outline takes its place; only when spares run out
  * does a failed code scenario come back as an approach-only one. A broken scenario is never published.
  *
  * <p>Builds run in parallel within {@link GenerationProperties#buildConcurrency()} (a global, bounded pool), and
@@ -95,16 +97,16 @@ public class ScenarioGenerator {
         }
     }
 
-    /** Spare outlines beyond the requested count: replacements for scenarios that fail validation. */
-    static int spares(int wanted) {
-        return Math.max(2, (int) Math.ceil(wanted * 0.4));
-    }
-
     public Outcome generate(ScenarioLab lab, Sink sink) {
         boolean sandbox = execution.available();
         ScenarioContext ctx = contexts.build(lab, sandbox);
+        if (!ScenarioFit.hasCodeFor(lab, ctx.loaded().context().contents().keySet())) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "NO_CODE_FOR_ROLES", "The code selected from this repository has "
+                    + "nothing the chosen roles work on (for example, no frontend code for a Frontend Engineer lab). Choose roles "
+                    + "that match what this repository contains.");
+        }
         int wanted = lab.getScenarioCount();
-        AiPrompt planPrompt = prompts.plan(ctx, lab, wanted + spares(wanted));
+        AiPrompt planPrompt = prompts.plan(ctx, lab, wanted + limits.spares(wanted));
         AiModelRouter.Routed<ScenarioPlan> plan = router.generate(planPrompt, settings(PLAN_MAX_OUTPUT_TOKENS),
                 raw -> validator.plan(raw, lab, ctx, wanted), problem -> prompts.repair(planPrompt, problem));
         log.info("Scenario plan ready: lab={} outlines={} executableLanguages={} model={} attempts={}", lab.getId(),
@@ -250,27 +252,32 @@ public class ScenarioGenerator {
             log.info("Scenario built: lab={} outline={} mode=APPROACH_ONLY model={}", lab.getId(), outline.key(), built.model());
             return new PreparedScenario(outline, built.value(), null);
         }
-        try {
-            return new PreparedScenario(outline, built.value(), harness.validate(built.value()));
-        } catch (HarnessValidator.HarnessRejected first) {
-            if (!reserveRepairCall.getAsBoolean()) {
-                log.info("Scenario harness rejected and no build calls left for a repair: lab={} outline={}", lab.getId(), outline.key());
-                return null;
-            }
-            log.info("Scenario harness rejected, repairing once: lab={} outline={} reason={}", lab.getId(), outline.key(),
-                    first.getMessage().length() > 200 ? first.getMessage().substring(0, 200) : first.getMessage());
-            AiPrompt repair = prompts.repair(prompt, "The scenario failed execution validation in the sandbox: " + first.getMessage());
+        GeneratedScenario candidate = built.value();
+        AiPrompt current = prompt;
+        for (int attempt = 0;; attempt++) {
             try {
-                AiModelRouter.Routed<GeneratedScenario> again = router.generate(repair, settings(ai.generation().maxOutputTokens()),
-                        raw -> validator.scenario(raw, outline, ctx), problem -> prompts.repair(repair, problem));
-                return new PreparedScenario(outline, again.value(), harness.validate(again.value()));
-            } catch (HarnessValidator.HarnessRejected second) {
-                log.warn("Scenario harness still invalid after repair, skipping: lab={} outline={}", lab.getId(), outline.key());
+                return new PreparedScenario(outline, candidate, harness.validate(candidate));
+            } catch (HarnessValidator.HarnessRejected rejected) {
+                if (attempt >= limits.harnessRepairs()) {
+                    log.warn("Scenario harness still invalid after {} repair(s), skipping: lab={} outline={}", attempt, lab.getId(),
+                            outline.key());
+                    return null;
+                }
+                if (!reserveRepairCall.getAsBoolean()) {
+                    log.info("Scenario harness rejected and no build calls left for a repair: lab={} outline={}", lab.getId(),
+                            outline.key());
+                    return null;
+                }
+                log.info("Scenario harness rejected, repairing: lab={} outline={} reason={}", lab.getId(), outline.key(),
+                        rejected.getMessage().length() > 200 ? rejected.getMessage().substring(0, 200) : rejected.getMessage());
+                AiPrompt repair = prompts.repair(current, "The scenario failed execution validation in the sandbox: " + rejected.getMessage());
+                candidate = router.generate(repair, settings(ai.generation().maxOutputTokens()),
+                        raw -> validator.scenario(raw, outline, ctx), problem -> prompts.repair(repair, problem)).value();
+                current = repair;
+            } catch (HarnessValidator.SandboxUnavailable e) {
+                log.warn("Sandbox unavailable while validating: lab={} outline={}", lab.getId(), outline.key());
                 return null;
             }
-        } catch (HarnessValidator.SandboxUnavailable e) {
-            log.warn("Sandbox unavailable while validating: lab={} outline={}", lab.getId(), outline.key());
-            return null;
         }
     }
 

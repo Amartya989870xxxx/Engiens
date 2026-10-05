@@ -26,7 +26,7 @@ import jakarta.validation.Validation;
 class ScenarioOutputValidatorTest {
 
     private static final GenerationProperties LIMITS = new GenerationProperties(3, 4, java.time.Duration.ofMinutes(10),
-            java.time.Duration.ofSeconds(90), 10);
+            java.time.Duration.ofSeconds(90), 10, 0.4, 1);
     private static final ScenarioOutputValidator VALIDATOR = new ScenarioOutputValidator(
             Validation.buildDefaultValidatorFactory().getValidator(), LIMITS);
 
@@ -40,10 +40,12 @@ class ScenarioOutputValidatorTest {
     }
 
     private static String outline(String key, String role, String mode, String language, String file) {
+        // A category each role really works on, so these tests are about files, roles and modes, not role fit.
+        String category = role.equals("CLOUD_ENGINEER") || role.equals("DEVOPS_ENGINEER") ? "INFRASTRUCTURE_DEPLOYMENT" : "CONCURRENCY_CONSISTENCY";
         return """
-                {"key":"%s","title":"Title %s","role":"%s","category":"CONCURRENCY_CONSISTENCY","difficulty":"INTERMEDIATE",
+                {"key":"%s","title":"Title %s","role":"%s","category":"%s","difficulty":"INTERMEDIATE",
                  "mode":"%s","language":%s,"problem":"p","groundedIn":[{"file":"%s","lineStart":2,"lineEnd":40,"why":"w"}],
-                 "expectedConcepts":["c"],"whyItFitsTheLevel":"w"}""".formatted(key, key, role, mode,
+                 "expectedConcepts":["c"],"whyItFitsTheLevel":"w"}""".formatted(key, key, role, category, mode,
                 language == null ? "null" : "\"" + language + "\"", file);
     }
 
@@ -84,7 +86,7 @@ class ScenarioOutputValidatorTest {
                 .isInstanceOf(InvalidAiOutputException.class);
     }
 
-    private static final ScenarioPlan.Outline CODE_OUTLINE = new ScenarioPlan.Outline("S1", "t", ScenarioRole.BACKEND_ENGINEER,
+    private static final ScenarioPlan.Outline CODE_OUTLINE = new ScenarioPlan.Outline("S1", "t", ScenarioRole.BACKEND_ENGINEER, null,
             com.engineeringlens.scenario.ScenarioCategory.ERROR_HANDLING, com.engineeringlens.scenario.ScenarioDifficulty.FOUNDATIONAL,
             ExecutionCapability.CODE, ScenarioLanguage.PYTHON, "p",
             List.of(new ScenarioPlan.Grounding("app/orders.py", 1, 2, "w")), List.of("c"), "w");

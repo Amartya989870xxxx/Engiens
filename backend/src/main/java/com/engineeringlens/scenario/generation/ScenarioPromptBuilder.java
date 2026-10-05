@@ -1,6 +1,7 @@
 package com.engineeringlens.scenario.generation;
 
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,6 @@ import com.engineeringlens.analysis.deterministic.Signal;
 import com.engineeringlens.analysis.review.ReviewPromptBuilder;
 import com.engineeringlens.scenario.ExecutionCapability;
 import com.engineeringlens.scenario.ScenarioCategory;
-import com.engineeringlens.scenario.ScenarioDifficulty;
 import com.engineeringlens.scenario.ScenarioLab;
 import com.engineeringlens.scenario.ScenarioRole;
 import com.engineeringlens.scenario.generation.ScenarioContextBuilder.ScenarioContext;
@@ -47,23 +47,27 @@ public class ScenarioPromptBuilder {
         StringBuilder s = new StringBuilder(RULES);
         s.append("\n# TASK\nPropose exactly ").append(outlines).append(" scenario outlines for this repository (")
                 .append(lab.getScenarioCount()).append(" will be used; the rest are spares, so make every one usable).\n")
-                .append("Vary the categories and the parts of the code they touch. Order them from most to least valuable.\n");
-        int cap = validator.diversityCap(lab.getScenarioCount());
+                .append("Vary the categories and the parts of the code they touch, within the TARGET. Order them from most to least "
+                        + "valuable.\n");
+        int cap = validator.diversityCap(lab);
         if (cap != Integer.MAX_VALUE) {
             s.append("This is a large lab: at most ").append(cap).append(" outlines may share a category, and at most ").append(cap)
                     .append(" may have the same first groundedIn file. Spread them across different parts of the repository.\n");
         }
         s.append(audience(lab));
+        s.append(fit(lab));
         s.append("\n# EXECUTION\n");
         if (ctx.executableLanguages().isEmpty()) {
             s.append("No code can be executed for this lab: every outline must use mode APPROACH_ONLY with language null.\n");
         } else {
             s.append("CODE scenarios can be executed in: ").append(ctx.executableLanguages()).append(
-                    ". Prefer mode CODE where an executable fix is natural (backend, frontend logic, full-stack, AI/ML code) and the "
-                            + "grounding files are in one of those languages; set language to that language. Use APPROACH_ONLY "
-                            + "(language null) for architecture, cloud, network, infrastructure or research decisions, or when the "
-                            + "relevant code isn't in an executable language. When the selected roles allow it, at least half the "
-                            + "outlines should be CODE.\n");
+                    ". Prefer mode CODE where an executable fix is natural and the grounding files are in one of those languages; "
+                            + "set language to that language. Use APPROACH_ONLY (language null) only for problems that are genuinely "
+                            + "architecture, cloud, network, infrastructure or research decisions, or when the relevant code isn't in an "
+                            + "executable language; never just because writing checks is harder.\n");
+            if (ScenarioOutputValidator.codeNeeded(lab, ctx, lab.getScenarioCount()) > 0) {
+                s.append("These roles write code: at least three quarters of the outlines must be CODE.\n");
+            }
         }
         s.append("\n# OUTPUT CONTRACT\n").append("""
                 Return exactly one JSON object:
@@ -73,7 +77,9 @@ public class ScenarioPromptBuilder {
                   "outlines": [ {
                     "key": "S1", "S2", ...,
                     "title": str (specific, e.g. "Prevent duplicate orders under concurrent checkout"),
-                    "role": ROLE, "category": CATEGORY, "difficulty": DIFFICULTY,
+                    "role": ROLE (the primary role), "applicableRoles": [ROLE] | null (other TARGET roles the problem genuinely
+                      crosses into, e.g. a client/server contract in a Backend + Frontend lab; usually null),
+                    "category": CATEGORY, "difficulty": DIFFICULTY,
                     "mode": "CODE" | "APPROACH_ONLY", "language": LANGUAGE | null,
                     "problem": str (2-4 sentences: what goes wrong or what is needed, in this repository's terms),
                     "groundedIn": [ {"file": exact path from the inputs, "lineStart": int|null, "lineEnd": int|null,
@@ -86,8 +92,9 @@ public class ScenarioPromptBuilder {
                 CATEGORY = %s
                 DIFFICULTY = %s
                 LANGUAGE = %s
-                """.formatted(ScenarioPlan.SCHEMA_VERSION, allowedRoles(lab), names(ScenarioCategory.values()),
-                names(ScenarioDifficulty.values()), ctx.executableLanguages().isEmpty() ? "null" : names(ctx.executableLanguages().toArray())));
+                """.formatted(ScenarioPlan.SCHEMA_VERSION, names(ScenarioFit.roles(lab).toArray()),
+                names(ScenarioFit.categories(lab).toArray()), names(ScenarioFit.difficulties(lab.getSeniority()).toArray()),
+                ctx.executableLanguages().isEmpty() ? "null" : names(ctx.executableLanguages().toArray())));
         return new AiPrompt(s.toString(), evidence(ctx, null));
     }
 
@@ -97,7 +104,9 @@ public class ScenarioPromptBuilder {
         boolean code = outline.mode() == ExecutionCapability.CODE;
         StringBuilder s = new StringBuilder(RULES);
         s.append("\n# TASK\nTurn the outline below into a complete scenario a developer can work on. It must be about THIS ")
-                .append("repository: describe the incident and context in its terms, using its files, functions and data.\n");
+                .append("repository: describe the incident and context in its terms, using its files, functions and data.\n")
+                .append("Stay within the outline's role and the code it is grounded in: an executable workspace contains only that ")
+                .append("code (with stand-ins), never code from a part of the system its role doesn't own.\n");
         s.append(audience(lab));
         s.append("\n# OUTLINE\n").append(json.writeValueAsString(outline)).append('\n');
         if (code) {
@@ -174,12 +183,31 @@ public class ScenarioPromptBuilder {
         return s.toString();
     }
 
-    /** Broad Engineering lets the generator pick any specific role; otherwise only the chosen ones. */
-    private static String allowedRoles(ScenarioLab lab) {
-        List<ScenarioRole> roles = lab.getRoles().contains(ScenarioRole.BROAD_ENGINEERING)
-                ? Arrays.stream(ScenarioRole.values()).filter(r -> r != ScenarioRole.BROAD_ENGINEERING).toList()
-                : lab.getRoles();
-        return names(roles.toArray());
+    /** What "fits the TARGET" means, stated exactly as {@link ScenarioFit} will check it. */
+    private static String fit(ScenarioLab lab) {
+        StringBuilder s = new StringBuilder("\n# FIT (checked after you answer; outlines that don't fit are discarded)\n");
+        if (!lab.getRoles().contains(ScenarioRole.BROAD_ENGINEERING)) {
+            s.append("Categories each role may use at this seniority:\n");
+            for (ScenarioRole role : lab.getRoles()) {
+                Set<ScenarioCategory> categories = EnumSet.copyOf(ScenarioFit.CATEGORIES.get(role));
+                categories.removeAll(ScenarioFit.EXCLUDED.get(lab.getSeniority()));
+                s.append("- ").append(role).append(": ").append(names(categories.toArray())).append('\n');
+            }
+            s.append("""
+                    An outline's category must be one its primary role may use, and its first groundedIn file must be code that
+                    role owns: a Backend Engineer scenario is about server code, never a UI component or stylesheet; a Frontend
+                    Engineer scenario is about client code, never infrastructure; a DevOps, Cloud or Network scenario is about
+                    deployment, configuration or service-to-service behaviour, never a UI component.
+                    Never add scenarios outside these roles to make the lab more varied: fewer categories is better than an
+                    off-role scenario.
+                    """);
+        } else {
+            s.append("Broad engineering: any role and category the repository's code clearly supports. Set each outline's role to "
+                    + "the role that would really own the problem.\n");
+        }
+        s.append("Every difficulty must be one of DIFFICULTY: the depth of the problem must match ").append(lab.getSeniority().label())
+                .append(", not just the wording.\n");
+        return s.toString();
     }
 
     private static Set<String> files(ScenarioPlan.Outline outline) {

@@ -26,6 +26,8 @@ public final class ScenarioFixtures {
 
     private static final Pattern COUNT = Pattern.compile("Propose exactly (\\d+) scenario outlines");
     private static final Pattern ROLE = Pattern.compile("ROLE = \"([A-Z_]+)\"");
+    private static final Pattern ALLOWED_CATEGORIES = Pattern.compile("CATEGORY = (.+)");
+    private static final Pattern DIFFICULTY = Pattern.compile("DIFFICULTY = \"([A-Z_]+)\"");
 
     private ScenarioFixtures() {
     }
@@ -54,6 +56,12 @@ public final class ScenarioFixtures {
         Matcher role = ROLE.matcher(prompt.system());
         int n = count.find() ? Integer.parseInt(count.group(1)) : 5;
         String r = role.find() ? role.group(1) : "BACKEND_ENGINEER";
+        // Like a model that follows the contract: only the categories and difficulties the prompt allows.
+        Matcher allowed = ALLOWED_CATEGORIES.matcher(prompt.system());
+        String allowedList = allowed.find() ? allowed.group(1) : "";
+        List<String> categories = CATEGORIES.stream().filter(c -> allowedList.isEmpty() || allowedList.contains("\"" + c + "\"")).toList();
+        Matcher difficulty = DIFFICULTY.matcher(prompt.system());
+        String level = difficulty.find() ? difficulty.group(1) : "INTERMEDIATE";
         boolean code = !prompt.system().contains("No code can be executed");
         ObjectNode plan = JSON.createObjectNode();
         plan.put("scenarioPlanSchemaVersion", 1);
@@ -64,8 +72,8 @@ public final class ScenarioFixtures {
             o.put("key", "S" + i);
             o.put("title", "Prevent duplicate orders, variant " + i);
             o.put("role", r);
-            o.put("category", CATEGORIES.get((i - 1) % CATEGORIES.size()));
-            o.put("difficulty", "INTERMEDIATE");
+            o.put("category", categories.get((i - 1) % categories.size()));
+            o.put("difficulty", level);
             o.put("mode", code ? "CODE" : "APPROACH_ONLY");
             if (code) {
                 o.put("language", "PYTHON");

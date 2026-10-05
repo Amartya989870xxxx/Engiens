@@ -109,7 +109,7 @@ class ScenarioLabLifecycleTest extends ScenarioFlowSupport {
         String source = "\"repositoryId\":\"" + repoId + "\"";
 
         String first = createdId(create(auth, source, "[\"BACKEND_ENGINEER\"]", "\"SDE1\"", 5));
-        create(auth, source, "[\"FRONTEND_ENGINEER\"]", "\"SDE2\"", 10)
+        create(auth, source, "[\"DEVOPS_ENGINEER\"]", "\"SDE2\"", 10)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SCENARIO_LAB_ALREADY_ACTIVE"));
 
@@ -121,7 +121,7 @@ class ScenarioLabLifecycleTest extends ScenarioFlowSupport {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SCENARIO_LAB_NOT_ACTIVE"));
 
-        String second = createdId(create(auth, source, "[\"FRONTEND_ENGINEER\"]", "\"SDE2\"", 10));
+        String second = createdId(create(auth, source, "[\"DEVOPS_ENGINEER\"]", "\"SDE2\"", 10));
         mvc.perform(get("/api/scenario-labs/active").header("Authorization", auth)).andExpect(jsonPath("$.id").value(second));
         assertThat(labs.findById(UUID.fromString(first)).orElseThrow().getActiveUserId()).isNull();
     }

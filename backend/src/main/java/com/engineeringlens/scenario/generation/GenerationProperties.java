@@ -16,11 +16,18 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param deadlineBase           time allowed for any lab ...
  * @param deadlinePerScenario    ... plus this much per requested scenario; no new build starts after the deadline
  * @param diversityFromCount     labs at least this large cap outlines per category and per main file
+ * @param spareRatio             spare outlines planned per requested scenario (at least 2), the replacements for
+ *                               scenarios that fail validation
+ * @param harnessRepairs         repair attempts for a scenario whose code fails sandbox validation before it is replaced
  */
 @ConfigurationProperties("scenario.generation")
 public record GenerationProperties(@DefaultValue("3") int buildConcurrency, @DefaultValue("4") double buildCallsPerScenario,
         @DefaultValue("PT10M") Duration deadlineBase, @DefaultValue("PT90S") Duration deadlinePerScenario,
-        @DefaultValue("10") int diversityFromCount) {
+        @DefaultValue("10") int diversityFromCount, @DefaultValue("0.4") double spareRatio, @DefaultValue("1") int harnessRepairs) {
+
+    public int spares(int scenarios) {
+        return Math.max(2, (int) Math.ceil(scenarios * spareRatio));
+    }
 
     public int buildCallBudget(int scenarios) {
         return (int) Math.ceil(scenarios * buildCallsPerScenario);
