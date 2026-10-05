@@ -11,11 +11,9 @@ help:
 db:
 	docker compose up -d --wait postgres
 
-# Scenario Lab runs user code only in these images; the sandbox never pulls during a run.
-SANDBOX_IMAGES = python:3.12-slim node:24-alpine eclipse-temurin:21-jdk-alpine
-
+# Scenario Lab runs user code only in these pinned images; the sandbox never pulls during a run.
 sandbox-images:
-	for image in $(SANDBOX_IMAGES); do docker pull $$image; done
+	sh deploy/sandbox-images.sh
 
 backend: db
 	cd backend && ./mvnw spring-boot:run
