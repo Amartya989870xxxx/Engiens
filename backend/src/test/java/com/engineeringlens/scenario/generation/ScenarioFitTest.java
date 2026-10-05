@@ -37,7 +37,7 @@ import tools.jackson.databind.ObjectMapper;
 class ScenarioFitTest {
 
     private static final GenerationProperties LIMITS = new GenerationProperties(3, 4, java.time.Duration.ofMinutes(10),
-            java.time.Duration.ofSeconds(90), 10, 0.4, 1);
+            java.time.Duration.ofSeconds(90), 10, 0.4, 1, 14);
     private static final ScenarioOutputValidator VALIDATOR = new ScenarioOutputValidator(
             Validation.buildDefaultValidatorFactory().getValidator(), LIMITS);
 

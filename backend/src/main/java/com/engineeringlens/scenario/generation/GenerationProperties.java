@@ -19,11 +19,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param spareRatio             spare outlines planned per requested scenario (at least 2), the replacements for
  *                               scenarios that fail validation
  * @param harnessRepairs         repair attempts for a scenario whose code fails sandbox validation before it is replaced
+ * @param planBatchSize          most outlines asked for in one plan call; larger labs are planned in several calls, so
+ *                               no answer runs past a model's output limit (14 keeps 5- and 10-scenario labs at one call)
  */
 @ConfigurationProperties("scenario.generation")
 public record GenerationProperties(@DefaultValue("3") int buildConcurrency, @DefaultValue("4") double buildCallsPerScenario,
         @DefaultValue("PT10M") Duration deadlineBase, @DefaultValue("PT90S") Duration deadlinePerScenario,
-        @DefaultValue("10") int diversityFromCount, @DefaultValue("0.4") double spareRatio, @DefaultValue("1") int harnessRepairs) {
+        @DefaultValue("10") int diversityFromCount, @DefaultValue("0.4") double spareRatio, @DefaultValue("1") int harnessRepairs,
+        @DefaultValue("14") int planBatchSize) {
 
     public int spares(int scenarios) {
         return Math.max(2, (int) Math.ceil(scenarios * spareRatio));

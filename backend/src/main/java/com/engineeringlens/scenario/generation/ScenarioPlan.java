@@ -29,6 +29,11 @@ public record ScenarioPlan(@NotNull Integer scenarioPlanSchemaVersion, @NotBlank
             ScenarioLanguage language, @NotBlank String problem, @NotNull @Size(min = 1) List<@Valid @NotNull Grounding> groundedIn,
             @NotNull List<@NotBlank String> expectedConcepts, @NotBlank String whyItFitsTheLevel) {
 
+        Outline withKey(String newKey) {
+            return new Outline(newKey, title, role, applicableRoles, category, difficulty, mode, language, problem, groundedIn,
+                    expectedConcepts, whyItFitsTheLevel);
+        }
+
         Outline withMode(ExecutionCapability newMode, ScenarioLanguage newLanguage) {
             return new Outline(key, title, role, applicableRoles, category, difficulty, newMode, newLanguage, problem, groundedIn,
                     expectedConcepts, whyItFitsTheLevel);

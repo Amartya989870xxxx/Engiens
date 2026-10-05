@@ -2,6 +2,7 @@ package com.engineeringlens.scenario.generation;
 
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -106,16 +107,11 @@ public class ScenarioGenerator {
                     + "that match what this repository contains.");
         }
         int wanted = lab.getScenarioCount();
-        AiPrompt planPrompt = prompts.plan(ctx, lab, wanted + limits.spares(wanted));
-        AiModelRouter.Routed<ScenarioPlan> plan = router.generate(planPrompt, settings(PLAN_MAX_OUTPUT_TOKENS),
-                raw -> validator.plan(raw, lab, ctx, wanted), problem -> prompts.repair(planPrompt, problem));
-        log.info("Scenario plan ready: lab={} outlines={} executableLanguages={} model={} attempts={}", lab.getId(),
-                plan.value().outlines().size(), ctx.executableLanguages(), plan.model(), plan.attempts());
+        List<ScenarioPlan.Outline> plan = plan(ctx, lab, wanted);
         sink.planned();
 
-        Run run = new Run(ctx, lab, plan.value().outlines(), sink, limits.buildCallBudget(wanted),
-                Instant.now().plus(limits.deadline(wanted)));
-        int workers = Math.max(1, Math.min(limits.buildConcurrency(), plan.value().outlines().size()));
+        Run run = new Run(ctx, lab, plan, sink, limits.buildCallBudget(wanted), Instant.now().plus(limits.deadline(wanted)));
+        int workers = Math.max(1, Math.min(limits.buildConcurrency(), plan.size()));
         CompletableFuture<?>[] running = new CompletableFuture<?>[workers];
         for (int i = 0; i < workers; i++) {
             running[i] = CompletableFuture.runAsync(run::work, builds);
@@ -125,6 +121,44 @@ public class ScenarioGenerator {
         log.info("Scenario builds ended: lab={} produced={}/{} stopReason={} buildCallsLeft={}", lab.getId(), outcome.produced(),
                 wanted, outcome.stopReason(), run.callsLeft);
         return outcome;
+    }
+
+    /**
+     * The requested scenarios plus spares, planned in batches of at most {@link GenerationProperties#planBatchSize()}
+     * outlines: one long answer for a 20-scenario lab ran past the model's output limit. Every batch sees the
+     * outlines before it. The requested count must be reached; spares are best effort.
+     */
+    private List<ScenarioPlan.Outline> plan(ScenarioContext ctx, ScenarioLab lab, int wanted) {
+        int total = wanted + limits.spares(wanted);
+        List<ScenarioPlan.Outline> planned = new ArrayList<>();
+        while (planned.size() < total) {
+            int ask = Math.min(limits.planBatchSize(), total - planned.size());
+            int needed = Math.min(ask, Math.max(0, wanted - planned.size()));
+            List<ScenarioPlan.Outline> before = List.copyOf(planned);
+            AiPrompt prompt = prompts.plan(ctx, lab, ask, before);
+            List<ScenarioPlan.Outline> batch;
+            try {
+                AiModelRouter.Routed<ScenarioPlan> routed = router.generate(prompt, settings(PLAN_MAX_OUTPUT_TOKENS),
+                        raw -> validator.plan(raw, lab, ctx, needed, before), problem -> prompts.repair(prompt, problem));
+                batch = routed.value().outlines();
+                log.info("Scenario plan batch ready: lab={} outlines={} total={} model={} attempts={}", lab.getId(), batch.size(),
+                        planned.size() + batch.size(), routed.model(), routed.attempts());
+            } catch (AiUnavailableException e) {
+                if (needed > 0) {
+                    throw e;
+                }
+                log.info("Scenario spare outlines unavailable, building without more: lab={} planned={}", lab.getId(), planned.size());
+                break;
+            }
+            if (batch.isEmpty()) {
+                break;
+            }
+            for (ScenarioPlan.Outline o : batch) {
+                planned.add(o.withKey("S" + (planned.size() + 1)));
+            }
+        }
+        log.info("Scenario plan ready: lab={} outlines={} executableLanguages={}", lab.getId(), planned.size(), ctx.executableLanguages());
+        return planned;
     }
 
     /**

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,6 +43,7 @@ public class ScenarioOutputValidator {
     static final int MAX_WORKSPACE_BYTES = 64 * 1024;
     static final int MAX_CHECKS_BYTES = 32 * 1024;
     private static final int MAX_TEXT = 6000;
+    private static final Pattern NULL_LANGUAGE = Pattern.compile("\"language\"\\s*:\\s*\"(?i:null|none)?\"");
 
     private static final JsonMapper MAPPER = JsonMapper.builder()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -75,7 +77,16 @@ public class ScenarioOutputValidator {
      * seniority ({@link ScenarioFit}). Misfits are dropped here, before anything is built or shown.
      */
     public ScenarioPlan plan(String raw, ScenarioLab lab, ScenarioContext ctx, int needed) {
-        ScenarioPlan plan = bind(raw, ScenarioPlan.class);
+        return plan(raw, lab, ctx, needed, List.of());
+    }
+
+    /**
+     * One batch of a plan made in several calls: {@code planned} are the outlines earlier batches produced, so
+     * titles stay unique and the diversity caps count the whole lab, not just this batch.
+     */
+    public ScenarioPlan plan(String raw, ScenarioLab lab, ScenarioContext ctx, int needed, List<ScenarioPlan.Outline> planned) {
+        // Models sometimes write the JSON null as a string; it means "no language" (an approach-only outline).
+        ScenarioPlan plan = bind(NULL_LANGUAGE.matcher(raw).replaceAll("\"language\": null"), ScenarioPlan.class);
         if (plan.scenarioPlanSchemaVersion() != ScenarioPlan.SCHEMA_VERSION) {
             throw new InvalidAiOutputException("scenarioPlanSchemaVersion must be " + ScenarioPlan.SCHEMA_VERSION);
         }
@@ -85,6 +96,11 @@ public class ScenarioOutputValidator {
         int cap = diversityCap(lab);
         Map<Object, Integer> perCategory = new HashMap<>();
         Map<String, Integer> perFile = new HashMap<>();
+        for (ScenarioPlan.Outline o : planned) {
+            titles.add(o.title().strip().toLowerCase());
+            perCategory.merge(o.category(), 1, Integer::sum);
+            perFile.merge(o.groundedIn().get(0).file(), 1, Integer::sum);
+        }
         int overCap = 0;
         for (ScenarioPlan.Outline o : plan.outlines()) {
             List<ScenarioPlan.Grounding> grounding = o.groundedIn().stream().map(g -> grounding(g, ctx.loaded()))

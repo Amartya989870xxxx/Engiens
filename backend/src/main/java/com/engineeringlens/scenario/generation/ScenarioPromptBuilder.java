@@ -44,6 +44,11 @@ public class ScenarioPromptBuilder {
     // ---- step 1: plan ---------------------------------------------------------------------------
 
     public AiPrompt plan(ScenarioContext ctx, ScenarioLab lab, int outlines) {
+        return plan(ctx, lab, outlines, List.of());
+    }
+
+    /** One plan batch. Large labs are planned in batches so no single answer is too long; later ones see what exists. */
+    public AiPrompt plan(ScenarioContext ctx, ScenarioLab lab, int outlines, List<ScenarioPlan.Outline> planned) {
         StringBuilder s = new StringBuilder(RULES);
         s.append("\n# TASK\nPropose exactly ").append(outlines).append(" scenario outlines for this repository (")
                 .append(lab.getScenarioCount()).append(" will be used; the rest are spares, so make every one usable).\n")
@@ -53,6 +58,12 @@ public class ScenarioPromptBuilder {
         if (cap != Integer.MAX_VALUE) {
             s.append("This is a large lab: at most ").append(cap).append(" outlines may share a category, and at most ").append(cap)
                     .append(" may have the same first groundedIn file. Spread them across different parts of the repository.\n");
+        }
+        if (!planned.isEmpty()) {
+            s.append("\n# ALREADY PLANNED (").append(planned.size()).append(" outlines)\nThese exist already. Propose different ")
+                    .append("problems (no repeats or near-variants), and count them towards the category and file limits:\n");
+            planned.forEach(o -> s.append("- ").append(o.title()).append(" [").append(o.category()).append(", ")
+                    .append(o.groundedIn().get(0).file()).append("]\n"));
         }
         s.append(audience(lab));
         s.append(fit(lab));

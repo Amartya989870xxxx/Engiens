@@ -26,7 +26,7 @@ import jakarta.validation.Validation;
 class ScenarioOutputValidatorTest {
 
     private static final GenerationProperties LIMITS = new GenerationProperties(3, 4, java.time.Duration.ofMinutes(10),
-            java.time.Duration.ofSeconds(90), 10, 0.4, 1);
+            java.time.Duration.ofSeconds(90), 10, 0.4, 1, 14);
     private static final ScenarioOutputValidator VALIDATOR = new ScenarioOutputValidator(
             Validation.buildDefaultValidatorFactory().getValidator(), LIMITS);
 
@@ -73,6 +73,16 @@ class ScenarioOutputValidatorTest {
                 lab(ScenarioRole.CLOUD_ENGINEER), CTX, 1);
         assertThat(plan.outlines().get(0).mode()).isEqualTo(ExecutionCapability.APPROACH_ONLY);
         assertThat(plan.outlines().get(0).language()).isNull();
+    }
+
+    /** Seen in a real 20-scenario run: a repaired plan wrote the JSON null as the string "null". */
+    @Test
+    void aLanguageWrittenAsTheStringNullMeansNoLanguage() {
+        String raw = plan(outline("S1", "CLOUD_ENGINEER", "APPROACH_ONLY", null, "deploy/main.tf")).replace("\"language\":null", "\"language\": \"null\"");
+        assertThat(raw).contains("\"null\"");
+        ScenarioPlan plan = VALIDATOR.plan(raw, lab(ScenarioRole.CLOUD_ENGINEER), CTX, 1);
+        assertThat(plan.outlines().get(0).language()).isNull();
+        assertThat(plan.outlines().get(0).mode()).isEqualTo(ExecutionCapability.APPROACH_ONLY);
     }
 
     @Test

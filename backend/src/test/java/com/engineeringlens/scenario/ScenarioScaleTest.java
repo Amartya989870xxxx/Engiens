@@ -97,9 +97,33 @@ class ScenarioScaleTest extends ScenarioFlowSupport {
         });
         Map<ScenarioCategory, Long> perCategory = saved.stream().collect(Collectors.groupingBy(Scenario::getCategory, Collectors.counting()));
         assertThat(perCategory.values()).allSatisfy(n -> assertThat(n).isLessThanOrEqualTo(5));
-        AiPrompt plan = prompts.stream().filter(ScenarioFixtures::isPlan).findFirst().orElseThrow();
-        assertThat(plan.system()).contains("Propose exactly 28 scenario outlines", "at most 5 outlines may share a category")
-                .doesNotContain("\"FRONTEND_CLIENT\"");
+        // 20 + 8 spares, planned in bounded calls of 14; later calls see the earlier outlines. This repository has only 5
+        // files and a file may ground at most 5 outlines, so two calls give 25; a third asks for the last 3 spares and,
+        // finding none that fit, simply adds nothing.
+        List<AiPrompt> plans = prompts.stream().filter(ScenarioFixtures::isPlan).toList();
+        assertThat(plans).hasSize(3);
+        assertThat(plans.get(2).system()).contains("Propose exactly 3 scenario outlines", "# ALREADY PLANNED (25 outlines)");
+        assertThat(plans.get(0).system()).contains("Propose exactly 14 scenario outlines", "at most 5 outlines may share a category")
+                .doesNotContain("\"FRONTEND_CLIENT\"", "ALREADY PLANNED");
+        assertThat(plans.get(1).system()).contains("Propose exactly 14 scenario outlines", "# ALREADY PLANNED (14 outlines)");
+    }
+
+    /**
+     * Seen in a real run: one 28-outline answer ran past the model's output limit and the lab failed. Planning now
+     * happens in bounded batches; the requested count must be planned, but spares are best effort.
+     */
+    @Test
+    void aLargeLabIsPlannedInBatchesAndAFailedSparesBatchDoesNotFailIt() throws Exception {
+        setUpRepo("scale-twenty-batches@example.com");
+        AtomicInteger plans = new AtomicInteger();
+        answers = p -> ScenarioFixtures.isPlan(p) && plans.incrementAndGet() > 2 ? "not json" : defaultAnswer(p);
+
+        String labId = startLab(auth, "\"repositoryId\":\"" + repoId + "\"", 20);
+
+        mvc.perform(get(labUrl(labId)).header("Authorization", auth))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.scenarios.length()").value(20))
+                .andExpect(jsonPath("$.generationNote").doesNotExist());
     }
 
     @Test

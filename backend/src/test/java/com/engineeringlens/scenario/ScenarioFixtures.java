@@ -27,6 +27,7 @@ public final class ScenarioFixtures {
     private static final Pattern COUNT = Pattern.compile("Propose exactly (\\d+) scenario outlines");
     private static final Pattern ROLE = Pattern.compile("ROLE = \"([A-Z_]+)\"");
     private static final Pattern ALLOWED_CATEGORIES = Pattern.compile("CATEGORY = (.+)");
+    private static final Pattern PLANNED = Pattern.compile("# ALREADY PLANNED \\((\\d+) outlines\\)");
     private static final Pattern DIFFICULTY = Pattern.compile("DIFFICULTY = \"([A-Z_]+)\"");
 
     private ScenarioFixtures() {
@@ -62,12 +63,15 @@ public final class ScenarioFixtures {
         List<String> categories = CATEGORIES.stream().filter(c -> allowedList.isEmpty() || allowedList.contains("\"" + c + "\"")).toList();
         Matcher difficulty = DIFFICULTY.matcher(prompt.system());
         String level = difficulty.find() ? difficulty.group(1) : "INTERMEDIATE";
+        // A later batch of a large plan continues where the earlier ones stopped.
+        Matcher planned = PLANNED.matcher(prompt.system());
+        int offset = planned.find() ? Integer.parseInt(planned.group(1)) : 0;
         boolean code = !prompt.system().contains("No code can be executed");
         ObjectNode plan = JSON.createObjectNode();
         plan.put("scenarioPlanSchemaVersion", 1);
         plan.put("repositorySummary", "A small FastAPI order service.");
         ArrayNode outlines = plan.putArray("outlines");
-        for (int i = 1; i <= n; i++) {
+        for (int i = offset + 1; i <= offset + n; i++) {
             ObjectNode o = outlines.addObject();
             o.put("key", "S" + i);
             o.put("title", "Prevent duplicate orders, variant " + i);
