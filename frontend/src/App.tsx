@@ -12,6 +12,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { RepositoryPage } from './pages/RepositoryPage'
 import { ReviewPage } from './pages/ReviewPage'
 import { LabAssessmentPage } from './scenario-history/LabAssessmentPage'
+import { ScenarioFeedbackPage } from './scenario-history/ScenarioFeedbackPage'
 import { LabCompletePage } from './scenario-lab/LabCompletePage'
 import { ScenarioLabPage } from './scenario-lab/ScenarioLabPage'
 
@@ -51,6 +52,7 @@ export default function App() {
                       </Suspense>
                     }
                   />
+                  <Route path="/scenario-lab/:labId/scenarios/:scenarioId/feedback" element={<ScenarioFeedbackPage />} />
                   <Route path="/scenario-lab/complete/:labId" element={<LabCompletePage />} />
                   <Route path="/repositories/:repositoryId/scenario-labs/:labId" element={<LabAssessmentPage />} />
                 </Route>

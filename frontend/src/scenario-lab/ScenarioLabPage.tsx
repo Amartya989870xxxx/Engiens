@@ -193,7 +193,11 @@ function ScenarioRow({ lab, scenario: s }: { lab: ScenarioLab; scenario: Scenari
       <span className="pt-0.5 text-right text-[13px]">
         {!s.submitted && <span className="text-muted">Not submitted</span>}
         {s.evaluationStatus === 'PENDING' && <span className="text-muted">Evaluating…</span>}
-        {s.evaluationStatus === 'COMPLETED' && <span className="text-ink">Evaluated</span>}
+        {s.evaluationStatus === 'COMPLETED' && (
+          <Link to={`/scenario-lab/${lab.id}/scenarios/${s.id}/feedback`} className="text-ink underline underline-offset-4 hover:text-white">
+            View feedback
+          </Link>
+        )}
         {s.evaluationStatus === 'FAILED' && (
           <span className="flex flex-col items-end gap-1">
             <span className="text-danger">Evaluation failed</span>

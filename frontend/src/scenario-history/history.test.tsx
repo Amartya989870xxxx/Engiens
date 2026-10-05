@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
 import { assessmentReport, historyItem } from '../scenario-lab/fixture'
 import { LabAssessmentPage } from './LabAssessmentPage'
+import { ScenarioFeedbackPage } from './ScenarioFeedbackPage'
 import { ScenarioLabHistory } from './ScenarioLabHistory'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
@@ -77,4 +78,25 @@ test('an assessment that isn’t yours or doesn’t exist shows a clear message'
   )
   renderWith('/repositories/repo-1/scenario-labs/nope', <LabAssessmentPage />, '/repositories/:repositoryId/scenario-labs/:labId')
   expect(await screen.findByRole('heading', { name: 'We couldn’t find that assessment.' })).toBeInTheDocument()
+})
+
+test('one scenario’s feedback is readable while the lab is still open, read-only', async () => {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(assessmentReport().scenarios[0]))
+  renderWith('/scenario-lab/lab-1/scenarios/sc-1/feedback', <ScenarioFeedbackPage />, '/scenario-lab/:labId/scenarios/:scenarioId/feedback')
+
+  expect(await screen.findByRole('heading', { level: 3, name: 'Prevent duplicate orders under retries' })).toBeInTheDocument()
+  expect(screen.getByText('Concurrent requests can still race')).toBeInTheDocument()
+  expect(screen.getByText('Order creation is not idempotent.')).toBeInTheDocument()
+  expect(screen.getByText(/overall assessment and personal learning points are written when/)).toBeInTheDocument()
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '← Back to the lab' })).toHaveAttribute('href', '/scenario-lab')
+  expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/scenario-labs\/lab-1\/scenarios\/sc-1\/feedback$/), expect.anything())
+})
+
+test('feedback that isn’t ready yet says so', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    json({ status: 409, code: 'SCENARIO_FEEDBACK_NOT_READY', message: 'This scenario’s evaluation isn’t ready yet.', fieldErrors: {} }, 409),
+  )
+  renderWith('/scenario-lab/lab-1/scenarios/sc-1/feedback', <ScenarioFeedbackPage />, '/scenario-lab/:labId/scenarios/:scenarioId/feedback')
+  expect(await screen.findByRole('alert')).toHaveTextContent('This scenario’s evaluation isn’t ready yet.')
 })

@@ -173,6 +173,37 @@ class ScenarioWorkspaceFlowTest extends ScenarioFlowSupport {
     }
 
     @Test
+    void aSubmittedScenariosFeedbackCanBeReadWhileTheLabIsStillOpen() throws Exception {
+        Lab lab = lab("ws-feedback@example.com");
+        mvc.perform(get(scenarioUrl(lab, 0) + "/feedback").header("Authorization", lab.auth()))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("SCENARIO_ATTEMPT_NOT_FOUND"));
+
+        submit(lab, 0, "CODE", ScenarioFixtures.FIXED, "Return the existing order on a retry.").andExpect(status().isOk());
+
+        String body = mvc.perform(get(scenarioUrl(lab, 0) + "/feedback").header("Authorization", lab.auth()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Prevent duplicate orders under retries"))
+                .andExpect(jsonPath("$.mode").value("CODE"))
+                .andExpect(jsonPath("$.submittedFiles[0].content").value(ScenarioFixtures.FIXED))
+                .andExpect(jsonPath("$.runResult.passed").value(3))
+                .andExpect(jsonPath("$.evaluation.verdict").value("SOLID"))
+                .andExpect(jsonPath("$.evaluation.whatWasMissed[0]").value("Concurrent requests can still race"))
+                .andExpect(jsonPath("$.learningPoints.length()").value(0)) // personal learning points come with the final assessment
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("HIDDEN_CHECK_SOURCE");
+        mvc.perform(get("/api/scenario-labs/" + lab.labId()).header("Authorization", lab.auth())).andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        String mallory = register("ws-feedback-intruder@example.com");
+        mvc.perform(get(scenarioUrl(lab, 0) + "/feedback").header("Authorization", mallory))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("SCENARIO_LAB_NOT_FOUND"));
+
+        answers = p -> ScenarioFixtures.isAssess(p) ? "not json" : defaultAnswer(p);
+        submit(lab, 1, "APPROACH", null, APPROACH).andExpect(jsonPath("$.evaluationStatus").value("FAILED"));
+        mvc.perform(get(scenarioUrl(lab, 1) + "/feedback").header("Authorization", lab.auth()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCENARIO_FEEDBACK_NOT_READY"));
+    }
+
+    @Test
     void submissionsAreValidated() throws Exception {
         Lab lab = lab("ws-validation@example.com");
         submit(lab, 0, "APPROACH", null, "too short").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("APPROACH_REQUIRED"));

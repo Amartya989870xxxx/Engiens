@@ -551,3 +551,5 @@ export async function downloadFile(path: string, fallbackName: string) {
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+/** One evaluated scenario's feedback, readable while its lab is still open. */
+export const getScenarioFeedback = (labId: string, scenarioId: string) => api<ScenarioResult>(`${scenario(labId, scenarioId)}/feedback`)

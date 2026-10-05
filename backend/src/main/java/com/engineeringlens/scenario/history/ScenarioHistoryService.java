@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.engineeringlens.common.ApiException;
 import com.engineeringlens.repository.ImportedRepo;
 import com.engineeringlens.repository.ImportedRepoRepository;
+import com.engineeringlens.scenario.EvaluationStatus;
 import com.engineeringlens.scenario.Scenario;
 import com.engineeringlens.scenario.ScenarioAttempt;
 import com.engineeringlens.scenario.ScenarioAttemptRepository;
@@ -94,13 +95,7 @@ public class ScenarioHistoryService {
             if (a == null) {
                 continue;
             }
-            results.add(new LabAssessmentResponse.ScenarioResult(s.getId(), s.getPosition(), s.getTitle(), s.getRole(), s.getCategory(),
-                    s.getDifficulty(), s.getExecutionCapability(), s.getLanguage(), json.readValue(s.getScenarioJson(), ScenarioDocument.class),
-                    a.getMode(), a.getSubmittedFilesJson() == null ? List.of() : json.readValue(a.getSubmittedFilesJson(), FILES),
-                    a.getSubmittedApproach(), a.getRunResultJson() == null ? null : json.readValue(a.getRunResultJson(), RunResult.class),
-                    a.getEvaluationJson() == null ? null : json.readValue(a.getEvaluationJson(), ScenarioEvaluation.class),
-                    json.readValue(s.getReferenceJson(), ScenarioReference.class), learning.getOrDefault(s.getId().toString(), List.of()),
-                    a.getCreatedAt()));
+            results.add(result(s, a, learning.getOrDefault(s.getId().toString(), List.of())));
         }
         ImportedRepo repo = repositories.findById(lab.getRepositoryId()).orElse(null);
         List<ScenarioLab> completed = completedLabs(userId, lab.getRepositoryId());
@@ -108,6 +103,37 @@ public class ScenarioHistoryService {
         return new LabAssessmentResponse(lab.getId(), number, lab.getRepositoryId(), repo == null ? null : repo.getGithubRepoName(),
                 repo == null ? null : repo.getGithubUrl(), lab.getReviewId(), lab.getCommitSha(), lab.getRoles(), lab.getSeniority(),
                 lab.getScenarioCount(), lab.getCreatedAt(), lab.getCompletedAt(), assessment, results);
+    }
+
+    /**
+     * One submitted scenario's evaluation, available as soon as it is evaluated, while the lab is still open.
+     * Read-only: the submission is frozen. Personal learning points arrive with the lab's final assessment.
+     */
+    @Transactional(readOnly = true)
+    public LabAssessmentResponse.ScenarioResult feedback(UUID userId, UUID labId, UUID scenarioId) {
+        ScenarioLab lab = labs.findByIdAndUserId(labId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SCENARIO_LAB_NOT_FOUND", "We couldn't find that Scenario Lab."));
+        Scenario s = scenarios.findByIdAndLabId(scenarioId, lab.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SCENARIO_NOT_FOUND", "We couldn't find that scenario."));
+        ScenarioAttempt a = attempts.findByScenarioId(s.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SCENARIO_ATTEMPT_NOT_FOUND", "This scenario hasn't been submitted yet."));
+        if (a.getEvaluationStatus() != EvaluationStatus.COMPLETED) {
+            throw new ApiException(HttpStatus.CONFLICT, "SCENARIO_FEEDBACK_NOT_READY", "This scenario's evaluation isn't ready yet.");
+        }
+        List<String> learning = assessments.findById(labId)
+                .map(x -> json.readValue(x.getAssessmentJson(), LabAssessment.class).scenarioLearning().stream()
+                        .filter(l -> l.scenarioId().equals(s.getId().toString())).flatMap(l -> l.learningPoints().stream()).toList())
+                .orElse(List.of());
+        return result(s, a, learning);
+    }
+
+    private LabAssessmentResponse.ScenarioResult result(Scenario s, ScenarioAttempt a, List<String> learningPoints) {
+        return new LabAssessmentResponse.ScenarioResult(s.getId(), s.getPosition(), s.getTitle(), s.getRole(), s.getCategory(),
+                s.getDifficulty(), s.getExecutionCapability(), s.getLanguage(), json.readValue(s.getScenarioJson(), ScenarioDocument.class),
+                a.getMode(), a.getSubmittedFilesJson() == null ? List.of() : json.readValue(a.getSubmittedFilesJson(), FILES),
+                a.getSubmittedApproach(), a.getRunResultJson() == null ? null : json.readValue(a.getRunResultJson(), RunResult.class),
+                a.getEvaluationJson() == null ? null : json.readValue(a.getEvaluationJson(), ScenarioEvaluation.class),
+                json.readValue(s.getReferenceJson(), ScenarioReference.class), learningPoints, a.getCreatedAt());
     }
 
     private List<ScenarioLab> completedLabs(UUID userId, UUID repositoryId) {

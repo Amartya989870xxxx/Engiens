@@ -29,6 +29,12 @@ public class ScenarioHistoryController {
         return service.assessment(userId(jwt), labId);
     }
 
+    /** One evaluated scenario's feedback, readable while the lab is still open. */
+    @GetMapping("/api/scenario-labs/{labId}/scenarios/{scenarioId}/feedback")
+    LabAssessmentResponse.ScenarioResult feedback(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID labId, @PathVariable UUID scenarioId) {
+        return service.feedback(userId(jwt), labId, scenarioId);
+    }
+
     private static UUID userId(Jwt jwt) {
         return UUID.fromString(jwt.getSubject());
     }

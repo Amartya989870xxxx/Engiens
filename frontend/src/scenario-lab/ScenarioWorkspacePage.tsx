@@ -123,10 +123,21 @@ function Workspace({ detail }: { detail: ScenarioDetail }) {
       <div className="mx-auto max-w-3xl px-4 py-16">
         <p className="text-sm text-muted">Scenario {detail.position} of {detail.scenarioCount}</p>
         <h1 className="mt-2 font-display text-3xl text-ink">{detail.title}</h1>
-        <p className="mt-4 text-sm text-muted">You’ve submitted this scenario. Its evaluation will be part of the lab’s assessment.</p>
-        <Link to="/scenario-lab" className="mt-6 inline-block text-sm text-ink underline underline-offset-4">
-          Back to the lab
-        </Link>
+        <p className="mt-4 text-sm text-muted">
+          {detail.evaluationStatus === 'COMPLETED'
+            ? 'You’ve submitted this scenario and its evaluation is ready.'
+            : 'You’ve submitted this scenario. Its evaluation is on its way.'}
+        </p>
+        <div className="mt-6 flex gap-5 text-sm">
+          {detail.evaluationStatus === 'COMPLETED' && (
+            <Link to={`/scenario-lab/${detail.labId}/scenarios/${detail.id}/feedback`} className="text-ink underline underline-offset-4">
+              View feedback
+            </Link>
+          )}
+          <Link to="/scenario-lab" className="text-muted underline underline-offset-4 hover:text-ink">
+            Back to the lab
+          </Link>
+        </div>
       </div>
     )
   }

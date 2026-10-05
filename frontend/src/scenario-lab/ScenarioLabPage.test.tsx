@@ -133,6 +133,7 @@ test('an open lab lists its scenarios and where each one stands', async () => {
           scenarioSummary(),
           scenarioSummary({ id: 'sc-2', position: 2, title: 'Add a timeout to payments', submitted: true, evaluationStatus: 'PENDING' }),
           scenarioSummary({ id: 'sc-3', position: 3, title: 'Split the order service', submitted: true, evaluationStatus: 'FAILED', executionCapability: 'APPROACH_ONLY', language: null }),
+          scenarioSummary({ id: 'sc-4', position: 4, title: 'Cache the catalogue', submitted: true, evaluationStatus: 'COMPLETED' }),
         ],
       }),
     ),
@@ -143,7 +144,9 @@ test('an open lab lists its scenarios and where each one stands', async () => {
   expect(screen.queryByRole('link', { name: /Add a timeout to payments/ })).not.toBeInTheDocument() // submitted: no workspace
   expect(screen.getByText('Evaluating…')).toBeInTheDocument()
   expect(screen.getByText('Evaluation failed')).toBeInTheDocument()
-  expect(screen.getByText('2 of 5 submitted')).toBeInTheDocument()
+  expect(screen.getByText('3 of 5 submitted')).toBeInTheDocument()
+  // An evaluated scenario's feedback can be read straight away, without finishing the lab.
+  expect(screen.getByRole('link', { name: 'View feedback' })).toHaveAttribute('href', '/scenario-lab/lab-1/scenarios/sc-4/feedback')
 })
 
 test('when the open lab completes, the user lands on the completion page, then Scenario Lab is empty again', async () => {
