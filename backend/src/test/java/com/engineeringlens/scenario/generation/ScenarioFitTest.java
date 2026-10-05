@@ -258,6 +258,26 @@ class ScenarioFitTest {
         assertThat(VALIDATOR.diversityCap(lab(Seniority.SDE1, 5, ScenarioRole.BACKEND_ENGINEER))).isEqualTo(Integer.MAX_VALUE);
     }
 
+    /**
+     * Seen in a real 20-scenario run: the second plan batch reworded outlines from the first (two body-size middleware
+     * scenarios on main.py, two UTCDateTime scenarios on models.py). In a large lab the same kind of problem in the
+     * same file appears once, across batches too; small labs are not held to it.
+     */
+    @Test
+    void aLargeLabHasNoTwoOutlinesOfTheSameKindInTheSameFile() {
+        ScenarioLab twenty = lab(Seniority.SDE1, 20, ScenarioRole.BACKEND_ENGINEER);
+        O first = new O("S1", "BACKEND_ENGINEER", "API_RELIABILITY", "INTERMEDIATE", "CODE", API);
+        O reworded = new O("S2", "BACKEND_ENGINEER", "API_RELIABILITY", "INTERMEDIATE", "CODE", API);
+        O otherKind = new O("S3", "BACKEND_ENGINEER", "ERROR_HANDLING", "INTERMEDIATE", "CODE", API);
+        assertThat(kept(twenty, 1, first, reworded, otherKind)).containsExactly("S1", "S3");
+
+        List<ScenarioPlan.Outline> earlierBatch = VALIDATOR.plan(plan(first), twenty, CTX, 1).outlines();
+        assertThat(VALIDATOR.plan(plan(reworded, otherKind), twenty, CTX, 1, earlierBatch).outlines())
+                .extracting(ScenarioPlan.Outline::key).containsExactly("S3");
+
+        assertThat(kept(lab(Seniority.SDE1, 5, ScenarioRole.BACKEND_ENGINEER), 1, first, reworded)).containsExactly("S1", "S2");
+    }
+
     @Test
     void aBuiltScenarioWhoseWorkspaceIsOffRoleIsRejectedBeforeItCanBePublished() {
         ScenarioPlan.Outline backend = VALIDATOR.plan(plan(new O("S1", "BACKEND_ENGINEER", "API_RELIABILITY", "INTERMEDIATE", "CODE",

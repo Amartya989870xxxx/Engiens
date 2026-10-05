@@ -57,7 +57,8 @@ public class ScenarioPromptBuilder {
         int cap = validator.diversityCap(lab);
         if (cap != Integer.MAX_VALUE) {
             s.append("This is a large lab: at most ").append(cap).append(" outlines may share a category, and at most ").append(cap)
-                    .append(" may have the same first groundedIn file. Spread them across different parts of the repository.\n");
+                    .append(" may have the same first groundedIn file. No two outlines may share both their first groundedIn file and ")
+                    .append("their category: that is the same problem reworded. Spread them across different parts of the repository.\n");
         }
         if (!planned.isEmpty()) {
             s.append("\n# ALREADY PLANNED (").append(planned.size()).append(" outlines)\nThese exist already. Propose different ")

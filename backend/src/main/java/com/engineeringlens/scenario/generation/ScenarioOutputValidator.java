@@ -96,7 +96,9 @@ public class ScenarioOutputValidator {
         int cap = diversityCap(lab);
         Map<Object, Integer> perCategory = new HashMap<>();
         Map<String, Integer> perFile = new HashMap<>();
+        Set<String> fileAndCategory = new HashSet<>();
         for (ScenarioPlan.Outline o : planned) {
+            fileAndCategory.add(o.groundedIn().get(0).file() + "|" + o.category());
             titles.add(o.title().strip().toLowerCase());
             perCategory.merge(o.category(), 1, Integer::sum);
             perFile.merge(o.groundedIn().get(0).file(), 1, Integer::sum);
@@ -121,10 +123,15 @@ public class ScenarioOutputValidator {
             }
             grounding = Stream.concat(Stream.of(grounding.get(0)),
                     grounding.stream().skip(1).filter(g -> ScenarioFit.fitsAnyRole(g.file(), involved))).toList();
-            if (perCategory.getOrDefault(o.category(), 0) >= cap || perFile.getOrDefault(mainFile, 0) >= cap) {
+            boolean large = cap != Integer.MAX_VALUE;
+            if (perCategory.getOrDefault(o.category(), 0) >= cap || perFile.getOrDefault(mainFile, 0) >= cap
+                    || (large && fileAndCategory.contains(mainFile + "|" + o.category()))) {
                 overCap++;
-                continue; // keeps a large lab from becoming twenty variations of one problem
+                // Keeps a large lab from becoming twenty variations of one problem. The same kind of problem in the same
+                // file is the near-duplicate a reworded outline produces (seen in a real 20-scenario run).
+                continue;
             }
+            fileAndCategory.add(mainFile + "|" + o.category());
             perCategory.merge(o.category(), 1, Integer::sum);
             perFile.merge(mainFile, 1, Integer::sum);
             // A CODE outline in a language the sandbox can't run here becomes a reasoning scenario rather than being lost.
@@ -140,7 +147,8 @@ public class ScenarioOutputValidator {
                             + String.join("; ", misfits.subList(0, Math.min(4, misfits.size()))) + "): use only the allowed CATEGORY "
                             + "and DIFFICULTY values, and ground each outline in code its role owns.")
                     + (overCap > 0 ? " Vary the scenarios: at most " + cap + " outlines may share a category, and at most " + cap
-                            + " may have the same first groundedIn file." : ""));
+                            + " may have the same first groundedIn file, and no two may share both their first groundedIn file and "
+                            + "their category." : ""));
         }
         int codeNeeded = codeNeeded(lab, ctx, needed);
         long code = usable.stream().limit(needed).filter(o -> o.mode() == ExecutionCapability.CODE).count();
