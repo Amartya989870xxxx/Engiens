@@ -94,6 +94,17 @@ class GitHubRawFileFallbackTest {
         server.verify();
     }
 
+    /** Seen on a real repository: an empty app/__init__.py made preparing the whole repository fail. */
+    @Test
+    void anEmptyFileIsReadAsEmptyNotAsAnOutage() {
+        server.expect(requestTo(RAW + "app/__init__.py")).andRespond(withSuccess("", MediaType.TEXT_PLAIN));
+        server.expect(requestTo(API + "pkg/__init__.py?ref=" + SHA)).andRespond(withSuccess("", MediaType.TEXT_PLAIN));
+
+        assertThat(client.getRawFile("octocat", "Hello-World", SHA, "app/__init__.py", null)).isEmpty();
+        assertThat(client.getRawFile("octocat", "Hello-World", SHA, "pkg/__init__.py", "ghs_installation")).isEmpty();
+        server.verify();
+    }
+
     @Test
     void whenBothPathsFailTheUsualGitHubErrorIsReturned() {
         server.expect(requestTo(RAW + "main.py")).andRespond(withException(new ConnectException("Connection refused")));

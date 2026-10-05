@@ -215,10 +215,8 @@ public class GitHubClient {
                     throw GitHubHttp.unavailable();
                 })
                 .body(byte[].class);
-        if (body == null) {
-            throw GitHubHttp.unavailable();
-        }
-        return body;
+        // A successful response with no body is an empty file (an empty __init__.py, say), not an outage.
+        return body == null ? new byte[0] : body;
     }
 
     /** The raw host is down or broken; the contents API may still work. Never leaves this class. */
