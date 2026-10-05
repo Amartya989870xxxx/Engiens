@@ -192,7 +192,9 @@ public class ScenarioExecutionService {
         } else if (provider instanceof DockerSandboxExecutionProvider docker) {
             List<String> missing = docker.missingImages(LanguageRuntime.images());
             if (!missing.isEmpty()) {
-                log.warn("Sandbox images not pulled yet: {}. Run `make sandbox-images`.", missing);
+                log.warn("Sandbox images not pulled yet: {}. Run deploy/sandbox-images.sh (make sandbox-images).", missing);
+            } else {
+                log.info("Code sandbox ready: Docker reachable, {} pinned image(s) present", LanguageRuntime.images().size());
             }
         }
     }
