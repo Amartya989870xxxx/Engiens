@@ -232,6 +232,36 @@ class ScenarioWorkspaceFlowTest extends ScenarioFlowSupport {
     }
 
     @Test
+    void finishingKeepsOnlyRealSubmissionsWhileDiscardingLeavesNoHistory() throws Exception {
+        // Finish: the unsubmitted scenarios stay unsubmitted; no attempts are invented for them.
+        Lab finished = lab("ws-finish-vs-discard@example.com");
+        submit(finished, 0, "APPROACH", null, APPROACH).andExpect(status().isOk());
+        mvc.perform(post("/api/scenario-labs/" + finished.labId() + "/finish").header("Authorization", finished.auth())).andExpect(status().isAccepted());
+        assertThat(attempts.findByLabIdOrderByCreatedAtAsc(UUID.fromString(finished.labId())))
+                .hasSize(1).allSatisfy(a -> assertThat(a.getEvaluationStatus()).isEqualTo(EvaluationStatus.COMPLETED));
+
+        // Discard, even with a submitted answer: no assessment, no history entry, and the lab never comes back as active.
+        String body = mvc.perform(post("/api/scenario-labs").header("Authorization", finished.auth()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"repositoryId\":\"" + finished.repoId() + "\",\"roles\":[\"BACKEND_ENGINEER\"],\"seniority\":\"SDE1\",\"scenarioCount\":5}"))
+                .andReturn().getResponse().getContentAsString();
+        Lab discarded = new Lab(finished.auth(), finished.repoId(), null, JsonPath.read(body, "$.id"), JsonPath.read(body, "$.scenarios[*].id"));
+        submit(discarded, 0, "APPROACH", null, APPROACH).andExpect(status().isOk());
+        mvc.perform(post("/api/scenario-labs/" + discarded.labId() + "/cancel").header("Authorization", discarded.auth()))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        mvc.perform(get("/api/scenario-labs/active").header("Authorization", finished.auth())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/repositories/" + finished.repoId() + "/scenario-labs").header("Authorization", finished.auth()))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(finished.labId()));
+        mvc.perform(get("/api/scenario-labs/" + discarded.labId() + "/assessment").header("Authorization", finished.auth()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCENARIO_ASSESSMENT_NOT_READY"));
+        mvc.perform(post("/api/scenario-labs/" + discarded.labId() + "/finish").header("Authorization", finished.auth()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCENARIO_LAB_NOT_ACTIVE"));
+        mvc.perform(post("/api/scenario-labs/" + finished.labId() + "/cancel").header("Authorization", finished.auth()))
+                .andExpect(status().isConflict()); // a finished lab can't be discarded afterwards
+    }
+
+    @Test
     void aLabWithAFailedEvaluationCantBeFinishedUntilItIsRetried() throws Exception {
         Lab lab = lab("ws-finish-failed@example.com");
         answers = p -> ScenarioFixtures.isAssess(p) ? "not json" : defaultAnswer(p);
