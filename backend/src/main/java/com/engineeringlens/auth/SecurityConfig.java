@@ -1,6 +1,7 @@
 package com.engineeringlens.auth;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.crypto.SecretKey;
@@ -24,6 +25,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -72,6 +74,11 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable) // stateless token API, no cookies
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // The API only returns JSON and files: nothing it sends should ever run, load resources or be framed.
+                // Spring Security also sends nosniff, frame-deny, no-cache, and HSTS on HTTPS requests.
+                .headers(h -> h
+                        .contentSecurityPolicy(c -> c.policyDirectives("default-src 'none'; frame-ancestors 'none'"))
+                        .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/actuator/health").permitAll()
                         // Browser redirect from GitHub; carries no token and is tied to a user by its state value.
@@ -88,9 +95,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origin}") String origin) {
+    CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origin}") String origins) {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of(origin));
+        // Exact origins only, comma-separated (e.g. the Vercel URL and a custom domain); never a wildcard.
+        cfg.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::strip).filter(o -> !o.isEmpty()).toList());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         // Browsers hide non-standard response headers from cross-origin scripts unless they're exposed: the
