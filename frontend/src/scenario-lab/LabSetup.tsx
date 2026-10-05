@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { createLab, getRecentReviews, getReview, type ScenarioLab, type ScenarioRole, type Seniority } from '../api'
+import { createLab, getLabCapacity, getRecentReviews, getReview, type ScenarioLab, type ScenarioRole, type Seniority } from '../api'
 import { ChoiceCard } from '../profile/ChoiceCard'
 import { TagSelect } from '../profile/TagSelect'
 import { Button, ErrorBanner, fieldError, inputClass, labelClass } from '../ui'
@@ -25,6 +25,7 @@ export function LabSetup({ reviewId, onStarted }: { reviewId: string | null; onS
   const review = useQuery({ queryKey: ['review', fromReview], queryFn: () => getReview(fromReview!), enabled: Boolean(fromReview) })
   const recent = useQuery({ queryKey: ['recent-reviews'], queryFn: getRecentReviews, enabled: !fromReview })
 
+  const capacity = useQuery({ queryKey: ['lab-capacity'], queryFn: getLabCapacity, staleTime: 60_000, retry: false })
   const start = useMutation({
     mutationFn: () =>
       createLab({
@@ -147,7 +148,18 @@ export function LabSetup({ reviewId, onStarted }: { reviewId: string | null; onS
             <ChoiceCard key={n} name="count" checked={count === n} onSelect={() => setCount(n)} title={String(n)} description={n === 5 ? 'Recommended' : undefined} />
           ))}
         </div>
-        {count > 5 && <p className="mt-3 text-xs text-muted">Larger labs take longer to generate: every scenario is checked before you see it.</p>}
+        {count > 5 && (
+          <p className="mt-3 text-xs text-muted">
+            Larger labs take longer to generate: every scenario is checked before you see it. You can start on each one as soon as
+            it’s ready.
+          </p>
+        )}
+        {count > 5 && capacity.data && !capacity.data.preferredModelAvailable && (
+          <p role="note" className="mt-2 text-xs text-ink">
+            The preferred AI model is busy or out of quota right now, so a {count}-scenario lab will run on fallback models and may
+            take noticeably longer, or end with fewer scenarios.
+          </p>
+        )}
       </fieldset>
 
       <div className="space-y-3">

@@ -349,7 +349,14 @@ export type ScenarioLab = {
   errorMessage: string | null
   createdAt: string
   completedAt: string | null
+  /** Validated scenarios that exist; while GENERATING each one listed is already workable. */
   scenarios: ScenarioSummary[]
+  /** PLANNING → BUILDING → DONE; null on labs created before progressive generation (= done). */
+  generationStage: 'PLANNING' | 'BUILDING' | 'DONE' | null
+  /** Code scenarios replaced after failing validation. */
+  scenariosRejected: number
+  /** Set when generation ended with fewer scenarios than requested, e.g. "17 of 20 scenarios generated." */
+  generationNote: string | null
 }
 
 export type CreateLabRequest = {
@@ -489,6 +496,8 @@ export type LabAssessmentReport = {
   completedAt: string
   assessment: LabAssessment
   scenarios: ScenarioResult[]
+  scenariosGenerated: number
+  generationNote: string | null
 }
 
 export type LabHistoryItem = {
@@ -501,6 +510,8 @@ export type LabHistoryItem = {
   commitSha: string
   reviewId: string | null
   completedAt: string
+  /** How many scenarios existed (fewer than scenarioCount when generation ended early). */
+  scenariosGenerated: number
 }
 
 const lab = (labId: string) => `/api/scenario-labs/${encodeURIComponent(labId)}`
@@ -510,6 +521,8 @@ export const createLab = (request: CreateLabRequest) => api<ScenarioLab>('/api/s
 /** The open lab, or null when there is none (the server answers 204). */
 export const getActiveLab = async () => (await api<ScenarioLab | undefined>('/api/scenario-labs/active')) ?? null
 export const getLab = (labId: string) => api<ScenarioLab>(lab(labId))
+/** Whether the preferred AI model is available now; when not, larger labs take longer. */
+export const getLabCapacity = () => api<{ preferredModelAvailable: boolean }>('/api/scenario-labs/capacity')
 export const cancelLab = (labId: string) => api<ScenarioLab>(`${lab(labId)}/cancel`, { method: 'POST' })
 export const retryFinalization = (labId: string) => api<void>(`${lab(labId)}/finalize`, { method: 'POST' })
 export const getScenario = (labId: string, scenarioId: string) => api<ScenarioDetail>(scenario(labId, scenarioId))

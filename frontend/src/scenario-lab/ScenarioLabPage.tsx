@@ -15,6 +15,7 @@ import {
 import { Button, ErrorBanner } from '../ui'
 import { lastLab, rememberLab } from './lastLab'
 import { LabSetup } from './LabSetup'
+import { generationProgress } from './progress'
 import { humanize, LANGUAGE_LABELS, ROLE_LABELS, rolesLabel, SENIORITY_LABELS } from './options'
 
 const isBusy = (lab: ScenarioLab | null | undefined) =>
@@ -110,7 +111,7 @@ function LabSession({ lab }: { lab: ScenarioLab }) {
         </span>
       </p>
       <div className="mt-10">
-        {lab.status === 'GENERATING' && <Generating lab={lab} />}
+        {lab.status === 'GENERATING' && <Generating lab={lab} submitted={submitted} />}
         {lab.status === 'ACTIVE' && <Scenarios lab={lab} submitted={submitted} />}
         {lab.status === 'FINALIZING' && <Finalizing lab={lab} />}
       </div>
@@ -118,20 +119,26 @@ function LabSession({ lab }: { lab: ScenarioLab }) {
   )
 }
 
-/** Honest progress: what is actually happening, and a count that only moves when a scenario is proven. */
-function Generating({ lab }: { lab: ScenarioLab }) {
+/**
+ * Generating: ready scenarios can be opened right away while the rest are built. Rows still being generated are
+ * shown but can't be selected. Finishing waits until generation has ended.
+ */
+function Generating({ lab, submitted }: { lab: ScenarioLab; submitted?: string }) {
   return (
-    <div className="border-t border-line pt-8">
-      <p role="status" className="flex items-center gap-2.5 text-ink">
-        <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-ink motion-reduce:animate-none" />
-        {lab.scenariosReady === 0
-          ? 'Reading the repository and planning scenarios from its code…'
-          : `Generating and validating scenarios: ${lab.scenariosReady} of ${lab.scenarioCount} ready`}
-      </p>
-      <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
-        Every executable scenario is run in a sandbox before you see it: its starter code must reproduce the problem and a
-        reference solution must pass its checks. This usually takes a few minutes. You can leave this page.
-      </p>
+    <div>
+      <div className="border-t border-line pt-8">
+        <p role="status" className="flex items-center gap-2.5 text-ink">
+          <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-ink motion-reduce:animate-none" />
+          {generationProgress(lab)}
+        </p>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+          Every executable scenario is run in a sandbox before it appears: its starter code must reproduce the problem and a
+          reference solution must pass its checks. Start on any ready scenario now; the rest keep generating. You can leave
+          this page.
+        </p>
+      </div>
+      <ScenarioList lab={lab} submitted={submitted} />
+      <p className="mt-4 text-xs leading-relaxed text-muted">You can finish the lab once generation has ended.</p>
       <EndLab lab={lab} label="Stop generating" />
     </div>
   )
@@ -141,6 +148,27 @@ function Scenarios({ lab, submitted }: { lab: ScenarioLab; submitted?: string })
   const done = lab.scenarios.filter((s) => s.submitted).length
   return (
     <div>
+      {lab.generationNote && (
+        <p role="note" className="mb-6 rounded-md border border-line px-3 py-2 text-sm text-ink">
+          {lab.generationNote} Only these can be solved and assessed.
+        </p>
+      )}
+      <ScenarioList lab={lab} submitted={submitted} />
+      <p className="mt-4 text-xs leading-relaxed text-muted">
+        Submit every scenario, or finish early with what you’ve submitted. Your assessment is then saved to the repository’s
+        history.
+      </p>
+      {done > 0 ? <FinishEarly lab={lab} submitted={done} /> : <EndLab lab={lab} label="Discard this lab" />}
+    </div>
+  )
+}
+
+/** Ready scenarios (selectable) followed, while generating, by placeholders for the ones not built yet. */
+function ScenarioList({ lab, submitted }: { lab: ScenarioLab; submitted?: string }) {
+  const done = lab.scenarios.filter((s) => s.submitted).length
+  const pending = lab.status === 'GENERATING' ? Math.max(0, lab.scenarioCount - lab.scenarios.length) : 0
+  return (
+    <div className="mt-6">
       {submitted && (
         <p role="status" className="mb-6 text-sm text-muted">
           Submitted “{submitted}”. It’s being evaluated in the background.
@@ -149,19 +177,21 @@ function Scenarios({ lab, submitted }: { lab: ScenarioLab; submitted?: string })
       <div className="flex items-baseline justify-between border-t border-line pt-6">
         <h2 className="font-display text-2xl text-ink">Scenarios</h2>
         <p className="text-sm text-muted">
-          {done} of {lab.scenarioCount} submitted
+          {done} of {lab.scenarios.length} submitted
         </p>
       </div>
       <ol className="mt-4 divide-y divide-line border-y border-line">
         {lab.scenarios.map((s) => (
           <ScenarioRow key={s.id} lab={lab} scenario={s} />
         ))}
+        {Array.from({ length: pending }, (_, i) => (
+          <li key={`pending-${i}`} aria-disabled className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 py-4">
+            <span className="font-display text-xl text-muted/50">{lab.scenarios.length + i + 1}</span>
+            <span className="h-3 w-2/3 rounded bg-raised motion-safe:animate-pulse" aria-hidden />
+            <span className="text-[13px] text-muted/70">Generating…</span>
+          </li>
+        ))}
       </ol>
-      <p className="mt-4 text-xs leading-relaxed text-muted">
-        Submit every scenario, or finish early with what you’ve submitted. Your assessment is then saved to the repository’s
-        history.
-      </p>
-      {done > 0 ? <FinishEarly lab={lab} submitted={done} /> : <EndLab lab={lab} label="Discard this lab" />}
     </div>
   )
 }
@@ -251,7 +281,7 @@ function FinishEarly({ lab, submitted }: { lab: ScenarioLab; submitted: number }
   const pending = lab.scenarios.some((s) => s.evaluationStatus === 'PENDING')
   const failed = lab.scenarios.some((s) => s.evaluationStatus === 'FAILED')
   const blocked = pending || failed
-  const remaining = lab.scenarioCount - submitted
+  const remaining = lab.scenarios.length - submitted
   return (
     <div className="mt-8 space-y-3">
       {!confirming ? (
@@ -270,7 +300,7 @@ function FinishEarly({ lab, submitted }: { lab: ScenarioLab; submitted: number }
       ) : (
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-line px-3 py-2" role="group" aria-label="Confirm finishing the lab">
           <span className="text-sm text-ink">
-            Finish with {submitted} of {lab.scenarioCount} submitted? The {remaining} unsubmitted {remaining === 1 ? 'scenario' : 'scenarios'} won’t be
+            Finish with {submitted} of {lab.scenarios.length} submitted? The {remaining} unsubmitted {remaining === 1 ? 'scenario' : 'scenarios'} won’t be
             assessed.
           </span>
           <Button type="button" className="h-8" busy={finish.isPending} onClick={() => finish.mutate()}>

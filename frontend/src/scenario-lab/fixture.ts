@@ -31,6 +31,9 @@ export const lab = (overrides: Partial<ScenarioLab> = {}): ScenarioLab => ({
   createdAt: '2026-10-04T10:00:00Z',
   completedAt: null,
   scenarios: [scenarioSummary()],
+  generationStage: 'DONE',
+  scenariosRejected: 0,
+  generationNote: null,
   ...overrides,
 })
 
@@ -100,6 +103,7 @@ export const historyItem = (overrides: Partial<LabHistoryItem> = {}): LabHistory
   commitSha: 'c0ffee1234567',
   reviewId: 'rev-1',
   completedAt: '2026-10-04T12:00:00Z',
+  scenariosGenerated: 5,
   ...overrides,
 })
 
@@ -160,5 +164,7 @@ export const assessmentReport = (overrides: Partial<LabAssessmentReport> = {}): 
       submittedAt: '2026-10-24T11:00:00Z',
     },
   ],
+  scenariosGenerated: 5,
+  generationNote: null,
   ...overrides,
 })

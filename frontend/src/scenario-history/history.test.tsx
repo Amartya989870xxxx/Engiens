@@ -26,7 +26,7 @@ function renderWith(path: string, element: React.ReactNode, route: string) {
 
 test('the review ends with a CTA and a compact history; each lab opens its read-only assessment', async () => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    json([historyItem({ id: 'lab-3', number: 3, roles: ['BACKEND_ENGINEER', 'CLOUD_ENGINEER'], scenarioCount: 10, scenariosCompleted: 10 }), historyItem()]),
+    json([historyItem({ id: 'lab-3', number: 3, roles: ['BACKEND_ENGINEER', 'CLOUD_ENGINEER'], scenarioCount: 10, scenariosCompleted: 10, scenariosGenerated: 10 }), historyItem()]),
   )
   renderWith('/reviews/rev-1', <ScenarioLabHistory repositoryId="repo-1" reviewId="rev-1" />, '/reviews/:id')
 
@@ -99,4 +99,10 @@ test('feedback that isn’t ready yet says so', async () => {
   )
   renderWith('/scenario-lab/lab-1/scenarios/sc-1/feedback', <ScenarioFeedbackPage />, '/scenario-lab/:labId/scenarios/:scenarioId/feedback')
   expect(await screen.findByRole('alert')).toHaveTextContent('This scenario’s evaluation isn’t ready yet.')
+})
+
+test('a lab that ended with fewer scenarios than requested is shown honestly in history', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(json([historyItem({ scenarioCount: 20, scenariosGenerated: 17, scenariosCompleted: 5 })]))
+  renderWith('/reviews/rev-1', <ScenarioLabHistory repositoryId="repo-1" reviewId="rev-1" />, '/reviews/:id')
+  expect(await screen.findByRole('link', { name: /Lab #1/ })).toHaveTextContent('5 of 17 scenarios (17 of 20 generated)')
 })

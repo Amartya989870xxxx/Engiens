@@ -56,7 +56,8 @@ function Report({ report: r }: { report: LabAssessmentReport }) {
         <Meta label="Roles">{rolesLabel(r.roles)}</Meta>
         <Meta label="Seniority">{SENIORITY_LABELS[r.seniority]}</Meta>
         <Meta label="Scenarios">
-          {r.scenarios.length} of {r.scenarioCount}
+          {r.scenarios.length} of {r.scenariosGenerated ?? r.scenarioCount}
+          {r.scenariosGenerated != null && r.scenariosGenerated < r.scenarioCount && ` (${r.scenariosGenerated} of ${r.scenarioCount} generated)`}
         </Meta>
         <Meta label="Completed">{dateFormat.format(new Date(r.completedAt))}</Meta>
         <Meta label="Commit">

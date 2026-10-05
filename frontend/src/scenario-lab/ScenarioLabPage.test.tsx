@@ -134,6 +134,7 @@ test('an open lab lists its scenarios and where each one stands', async () => {
           scenarioSummary({ id: 'sc-2', position: 2, title: 'Add a timeout to payments', submitted: true, evaluationStatus: 'PENDING' }),
           scenarioSummary({ id: 'sc-3', position: 3, title: 'Split the order service', submitted: true, evaluationStatus: 'FAILED', executionCapability: 'APPROACH_ONLY', language: null }),
           scenarioSummary({ id: 'sc-4', position: 4, title: 'Cache the catalogue', submitted: true, evaluationStatus: 'COMPLETED' }),
+          scenarioSummary({ id: 'sc-5', position: 5, title: 'Add a health check' }),
         ],
       }),
     ),
@@ -175,7 +176,7 @@ test('with some scenarios submitted, the lab can be finished early after confirm
     const url = String(input)
     if (init?.method === 'POST') calls.push(url)
     if (url.endsWith('/finish')) return new Response(null, { status: 202 })
-    return json(lab({ scenarios: [scenarioSummary({ submitted: true, evaluationStatus: 'COMPLETED' }), scenarioSummary({ id: 'sc-2', position: 2, title: 'Second' })] }))
+    return json(lab({ scenarios: [scenarioSummary({ submitted: true, evaluationStatus: 'COMPLETED' }), ...[2, 3, 4, 5].map((n) => scenarioSummary({ id: `sc-${n}`, position: n, title: `Scenario ${n}` }))] }))
   })
   renderAt('/scenario-lab')
 
@@ -186,8 +187,49 @@ test('with some scenarios submitted, the lab can be finished early after confirm
 })
 
 test('a lab can’t be finished while an answer is still being evaluated', async () => {
-  serve(() => json(lab({ scenarios: [scenarioSummary({ submitted: true, evaluationStatus: 'PENDING' })] })))
+  serve(() => json(lab({ scenarios: [scenarioSummary({ submitted: true, evaluationStatus: 'PENDING' }), ...[2, 3, 4, 5].map((n) => scenarioSummary({ id: `sc-${n}`, position: n, title: `Scenario ${n}` }))] })))
   renderAt('/scenario-lab')
   expect(await screen.findByRole('button', { name: 'Finish lab now' })).toBeDisabled()
   expect(screen.getByText('Wait for your answers to be evaluated before finishing.')).toBeInTheDocument()
+})
+
+test('while generating, ready scenarios can be opened, the rest are visibly not ready, and finishing waits', async () => {
+  const ready = [1, 2, 3].map((n) => scenarioSummary({ id: `sc-${n}`, position: n, title: `Ready scenario ${n}` }))
+  serve(() => json(lab({ status: 'GENERATING', generationStage: 'BUILDING', scenarioCount: 20, scenariosReady: 3, scenariosRejected: 2, scenarios: ready })))
+  renderAt('/scenario-lab')
+
+  expect(await screen.findByRole('status')).toHaveTextContent('3 of 20 ready · 2 replaced after validation')
+  expect(screen.getByRole('link', { name: /Ready scenario 1/ })).toHaveAttribute('href', '/scenario-lab/lab-1/scenarios/sc-1')
+  expect(screen.getAllByText('Generating…')).toHaveLength(17)
+  expect(screen.getAllByText('Generating…')[0].closest('li')).toHaveAttribute('aria-disabled')
+  expect(screen.getAllByRole('link', { name: /scenario/i })).toHaveLength(3) // placeholders are not selectable
+  expect(screen.queryByRole('button', { name: 'Finish lab now' })).not.toBeInTheDocument()
+  expect(screen.getByText('You can finish the lab once generation has ended.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Stop generating' })).toBeInTheDocument()
+})
+
+test('while the plan is being written, progress says so without inventing numbers', async () => {
+  serve(() => json(lab({ status: 'GENERATING', generationStage: 'PLANNING', scenarioCount: 10, scenariosReady: 0, scenarios: [] })))
+  renderAt('/scenario-lab')
+  expect(await screen.findByRole('status')).toHaveTextContent('Reading the repository and planning scenarios from its code…')
+  expect(screen.getAllByText('Generating…')).toHaveLength(10)
+})
+
+test('a lab whose generation ended partially says how many scenarios exist', async () => {
+  const some = Array.from({ length: 17 }, (_, i) => scenarioSummary({ id: `sc-${i + 1}`, position: i + 1, title: `Scenario ${i + 1}` }))
+  serve(() => json(lab({ scenarioCount: 20, scenariosReady: 17, generationNote: '17 of 20 scenarios generated.', scenarios: some })))
+  renderAt('/scenario-lab')
+  expect(await screen.findByRole('note')).toHaveTextContent('17 of 20 scenarios generated. Only these can be solved and assessed.')
+  expect(screen.getByText('0 of 17 submitted')).toBeInTheDocument()
+  expect(screen.queryByText('Generating…')).not.toBeInTheDocument()
+})
+
+test('setup warns honestly when larger labs would run on fallback models', async () => {
+  const user = userEvent.setup()
+  serve(empty, { '/api/scenario-labs/capacity': () => json({ preferredModelAvailable: false }) })
+  renderAt('/scenario-lab')
+  await user.click(await screen.findByRole('radio', { name: /^10/ }))
+  expect(await screen.findByRole('note')).toHaveTextContent('a 10-scenario lab will run on fallback models')
+  await user.click(screen.getByRole('radio', { name: /^5/ }))
+  expect(screen.queryByRole('note')).not.toBeInTheDocument()
 })

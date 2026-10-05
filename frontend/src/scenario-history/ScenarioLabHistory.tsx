@@ -52,7 +52,9 @@ export function ScenarioLabHistory({ repositoryId, reviewId }: { repositoryId: s
                       {rolesLabel(l.roles)} · {SENIORITY_LABELS[l.seniority]}
                     </span>
                     <span className="mt-0.5 block text-[13px] text-muted">
-                      {l.scenariosCompleted} of {l.scenarioCount} scenarios · {dateFormat.format(new Date(l.completedAt))} · commit{' '}
+                      {l.scenariosCompleted} of {l.scenariosGenerated ?? l.scenarioCount} scenarios
+                      {l.scenariosGenerated != null && l.scenariosGenerated < l.scenarioCount && ` (${l.scenariosGenerated} of ${l.scenarioCount} generated)`} ·{' '}
+                      {dateFormat.format(new Date(l.completedAt))} · commit{' '}
                       <span className="font-mono">{l.commitSha.slice(0, 7)}</span>
                     </span>
                   </span>
