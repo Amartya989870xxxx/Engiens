@@ -21,16 +21,19 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final ProfileService profiles;
+    private final AuthThrottle throttle;
 
-    public AuthService(UserRepository users, PasswordEncoder encoder, JwtService jwt, ProfileService profiles) {
+    public AuthService(UserRepository users, PasswordEncoder encoder, JwtService jwt, ProfileService profiles, AuthThrottle throttle) {
         this.users = users;
         this.encoder = encoder;
         this.jwt = jwt;
         this.profiles = profiles;
+        this.throttle = throttle;
     }
 
     @Transactional
-    public AuthResponse register(RegisterRequest req) {
+    public AuthResponse register(RegisterRequest req, String clientIp) {
+        throttle.beforeRegister(clientIp);
         String email = normalize(req.email());
         if (users.existsByEmail(email)) {
             throw emailTaken();
@@ -46,12 +49,16 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public AuthResponse login(LoginRequest req) {
-        User user = users.findByEmail(normalize(req.email())).orElse(null);
+    public AuthResponse login(LoginRequest req, String clientIp) {
+        String email = normalize(req.email());
+        throttle.beforeLogin(clientIp, email);
+        User user = users.findByEmail(email).orElse(null);
         // Same error for unknown email and wrong password so accounts can't be enumerated.
         if (user == null || !encoder.matches(req.password(), user.getPasswordHash())) {
+            throttle.loginFailed(email);
             throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Incorrect email or password");
         }
+        throttle.loginSucceeded(email);
         return new AuthResponse(jwt.issue(user), toResponse(user));
     }
 

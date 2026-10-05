@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @RestController
@@ -26,13 +27,13 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return service.register(request);
+    AuthResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
+        return service.register(request, http.getRemoteAddr());
     }
 
     @PostMapping("/login")
-    AuthResponse login(@Valid @RequestBody LoginRequest request) {
-        return service.login(request);
+    AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        return service.login(request, http.getRemoteAddr());
     }
 
     @GetMapping("/me")
