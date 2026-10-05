@@ -254,7 +254,7 @@ public final class ProgressCalculator {
         if (answers > 0) {
             parts.add(answers + (answers == 1 ? " Scenario Lab answer" : " Scenario Lab answers"));
         }
-        return String.join(", ", parts) + (repositories > 1 ? " across " + repositories + " repositories" : "");
+        return String.join(" and ", parts) + (repositories > 1 ? " across " + repositories + " repositories" : "");
     }
 
     private static String lowConfidenceNote(long n) {

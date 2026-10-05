@@ -96,7 +96,7 @@ class ProgressCalculatorTest {
         AreaProgress strength = area(review(SURGE, "c1", 0, Assessment.SOLID), answer(lab, 1, Assessment.DEVELOPING),
                 answer(lab, 2, Assessment.STRONG));
         assertThat(strength.indicator()).isEqualTo(Indicator.CONSISTENT_STRENGTH);
-        assertThat(strength.reason()).isEqualTo("Solid or Strong in 2 of 3 assessments (1 review, 2 Scenario Lab answers), including the latest.");
+        assertThat(strength.reason()).isEqualTo("Solid or Strong in 2 of 3 assessments (1 review and 2 Scenario Lab answers), including the latest.");
     }
 
     @Test

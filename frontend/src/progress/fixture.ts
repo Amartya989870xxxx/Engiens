@@ -113,7 +113,7 @@ export function richProgress(): Progress {
       return {
         ...a,
         indicator: 'CONSISTENT_STRENGTH',
-        reason: 'Solid or Strong in 2 of 2 assessments (1 review, 1 Scenario Lab answer), including the latest.',
+        reason: 'Solid or Strong in 2 of 2 assessments (1 review and 1 Scenario Lab answer), including the latest.',
         evidence: [lab, evidence()],
       }
     }

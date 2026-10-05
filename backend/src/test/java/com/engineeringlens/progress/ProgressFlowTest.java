@@ -101,7 +101,7 @@ class ProgressFlowTest extends ScenarioFlowSupport {
         String concurrency = "$.areas[?(@.area == 'CONCURRENCY_AND_CONSISTENCY')]";
         assertThat(JsonPath.<List<String>>read(body, concurrency + ".indicator")).containsExactly("CONSISTENT_STRENGTH");
         assertThat(JsonPath.<List<String>>read(body, concurrency + ".reason"))
-                .containsExactly("Solid or Strong in 2 of 2 assessments (1 review, 1 Scenario Lab answer), including the latest.");
+                .containsExactly("Solid or Strong in 2 of 2 assessments (1 review and 1 Scenario Lab answer), including the latest.");
         assertThat(JsonPath.<List<String>>read(body, concurrency + ".evidence[*].source")).containsExactly("SCENARIO", "REVIEW");
         assertThat(JsonPath.<List<String>>read(body, concurrency + ".evidence[0].labId")).containsExactly(labId);
         assertThat(JsonPath.<List<String>>read(body, concurrency + ".evidence[0].category")).containsExactly("CONCURRENCY_CONSISTENCY");
