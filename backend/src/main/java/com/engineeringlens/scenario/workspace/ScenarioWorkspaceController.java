@@ -57,6 +57,13 @@ public class ScenarioWorkspaceController {
         return service.retryEvaluation(userId(jwt), labId, scenarioId);
     }
 
+    /** Finish the lab with the scenarios submitted so far; poll the lab until COMPLETED. */
+    @PostMapping("/finish")
+    ResponseEntity<Void> finishEarly(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID labId) {
+        service.finishEarly(userId(jwt), labId);
+        return ResponseEntity.accepted().build();
+    }
+
     @PostMapping("/finalize")
     ResponseEntity<Void> retryFinalization(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID labId) {
         service.retryFinalization(userId(jwt), labId);

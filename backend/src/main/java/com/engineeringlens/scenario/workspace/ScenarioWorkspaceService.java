@@ -201,6 +201,12 @@ public class ScenarioWorkspaceService {
         return status(attempts.findById(attempt.getId()).orElse(attempt));
     }
 
+    /** Finish now with the scenarios submitted so far (all of them evaluated); the rest aren't assessed. */
+    public void finishEarly(UUID userId, UUID labId) {
+        ScenarioLab lab = labService.owned(userId, labId);
+        evaluation.finishEarly(lab.getId());
+    }
+
     /** Writing the final assessment failed (no AI model, restart): every submission is safe, so try again. */
     public void retryFinalization(UUID userId, UUID labId) {
         ScenarioLab lab = labService.owned(userId, labId);

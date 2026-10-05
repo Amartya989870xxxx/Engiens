@@ -167,3 +167,27 @@ test('when the open lab completes, the user lands on the completion page, then S
   renderAt('/scenario-lab')
   expect(await screen.findByRole('heading', { name: 'Test your engineering judgement against a real codebase.' })).toBeInTheDocument()
 })
+
+test('with some scenarios submitted, the lab can be finished early after confirming', async () => {
+  const user = userEvent.setup()
+  const calls: string[] = []
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input)
+    if (init?.method === 'POST') calls.push(url)
+    if (url.endsWith('/finish')) return new Response(null, { status: 202 })
+    return json(lab({ scenarios: [scenarioSummary({ submitted: true, evaluationStatus: 'COMPLETED' }), scenarioSummary({ id: 'sc-2', position: 2, title: 'Second' })] }))
+  })
+  renderAt('/scenario-lab')
+
+  await user.click(await screen.findByRole('button', { name: 'Finish lab now' }))
+  expect(screen.getByRole('group', { name: 'Confirm finishing the lab' })).toHaveTextContent('Finish with 1 of 5 submitted? The 4 unsubmitted scenarios won’t be assessed.')
+  await user.click(screen.getByRole('button', { name: 'Finish lab' }))
+  expect(calls).toEqual([expect.stringMatching(/\/api\/scenario-labs\/lab-1\/finish$/)])
+})
+
+test('a lab can’t be finished while an answer is still being evaluated', async () => {
+  serve(() => json(lab({ scenarios: [scenarioSummary({ submitted: true, evaluationStatus: 'PENDING' })] })))
+  renderAt('/scenario-lab')
+  expect(await screen.findByRole('button', { name: 'Finish lab now' })).toBeDisabled()
+  expect(screen.getByText('Wait for your answers to be evaluated before finishing.')).toBeInTheDocument()
+})

@@ -141,7 +141,11 @@ public class EvaluationPromptBuilder {
                  "overallAssessment": {"summary": str (3-5 sentences), "engineeringLevel": str, "confidence": "HIGH"|"MEDIUM"|"LOW"},
                  "strengths": [str], "growthAreas": [str], "limitations": [str]}
                 """.formatted(lab.getSeniority().label(), lab.getRoles().stream().map(r -> r.label()).toList());
-        return new AiPrompt(system, "# EVALUATED SCENARIOS\n" + json.writeValueAsString(evaluated) + "\n");
+        String scope = evaluated.size() < lab.getScenarioCount()
+                ? "The developer finished the lab early: " + evaluated.size() + " of " + lab.getScenarioCount()
+                        + " scenarios were submitted. Assess only these, and treat the small sample as a limitation.\n\n"
+                : "";
+        return new AiPrompt(system, scope + "# EVALUATED SCENARIOS\n" + json.writeValueAsString(evaluated) + "\n");
     }
 
     /** Learning points for THIS developer, from the final verdicts. No code; no way to change a verdict. */

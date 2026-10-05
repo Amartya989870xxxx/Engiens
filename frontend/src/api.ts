@@ -553,3 +553,5 @@ export async function downloadFile(path: string, fallbackName: string) {
 }
 /** One evaluated scenario's feedback, readable while its lab is still open. */
 export const getScenarioFeedback = (labId: string, scenarioId: string) => api<ScenarioResult>(`${scenario(labId, scenarioId)}/feedback`)
+/** Finish the open lab with the scenarios submitted so far; poll the lab until it is COMPLETED. */
+export const finishLab = (labId: string) => api<void>(`${lab(labId)}/finish`, { method: 'POST' })

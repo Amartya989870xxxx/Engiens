@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ApiError,
   cancelLab,
+  finishLab,
   getActiveLab,
   getLab,
   retryEvaluation,
@@ -157,9 +158,10 @@ function Scenarios({ lab, submitted }: { lab: ScenarioLab; submitted?: string })
         ))}
       </ol>
       <p className="mt-4 text-xs leading-relaxed text-muted">
-        Submit every scenario to finish the lab. Your assessment is then saved to the repository’s history.
+        Submit every scenario, or finish early with what you’ve submitted. Your assessment is then saved to the repository’s
+        history.
       </p>
-      <EndLab lab={lab} label="End this lab without an assessment" />
+      {done > 0 ? <FinishEarly lab={lab} submitted={done} /> : <EndLab lab={lab} label="Discard this lab" />}
     </div>
   )
 }
@@ -238,7 +240,54 @@ function Finalizing({ lab }: { lab: ScenarioLab }) {
   )
 }
 
-function EndLab({ lab, label }: { lab: ScenarioLab; label: string }) {
+/** Finish now with the submitted scenarios; the unsubmitted ones aren't assessed. Discarding stays possible. */
+function FinishEarly({ lab, submitted }: { lab: ScenarioLab; submitted: number }) {
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const finish = useMutation({
+    mutationFn: () => finishLab(lab.id),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['scenario-lab'] }),
+  })
+  const pending = lab.scenarios.some((s) => s.evaluationStatus === 'PENDING')
+  const failed = lab.scenarios.some((s) => s.evaluationStatus === 'FAILED')
+  const blocked = pending || failed
+  const remaining = lab.scenarioCount - submitted
+  return (
+    <div className="mt-8 space-y-3">
+      {!confirming ? (
+        <div className="flex flex-wrap items-center gap-4">
+          {remaining > 0 && (
+            <Button type="button" variant="secondary" className="h-8" disabled={blocked} onClick={() => setConfirming(true)}>
+              Finish lab now
+            </Button>
+          )}
+          {blocked && (
+            <span className="text-xs text-muted">
+              {pending ? 'Wait for your answers to be evaluated before finishing.' : 'Try the failed evaluation again before finishing.'}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-line px-3 py-2" role="group" aria-label="Confirm finishing the lab">
+          <span className="text-sm text-ink">
+            Finish with {submitted} of {lab.scenarioCount} submitted? The {remaining} unsubmitted {remaining === 1 ? 'scenario' : 'scenarios'} won’t be
+            assessed.
+          </span>
+          <Button type="button" className="h-8" busy={finish.isPending} onClick={() => finish.mutate()}>
+            Finish lab
+          </Button>
+          <Button type="button" variant="ghost" className="h-8" onClick={() => setConfirming(false)}>
+            Keep going
+          </Button>
+        </div>
+      )}
+      <ErrorBanner error={finish.error} />
+      <EndLab lab={lab} label="Discard this lab instead" warning={`Your ${submitted} submitted ${submitted === 1 ? 'answer' : 'answers'} won’t be saved to history.`} />
+    </div>
+  )
+}
+
+function EndLab({ lab, label, warning }: { lab: ScenarioLab; label: string; warning?: string }) {
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const end = useMutation({
@@ -257,9 +306,9 @@ function EndLab({ lab, label }: { lab: ScenarioLab; label: string }) {
   }
   return (
     <div className="mt-8 flex flex-wrap items-center gap-3" role="group" aria-label="Confirm ending the lab">
-      <span className="text-sm text-ink">End this lab? Nothing from it will be saved to history.</span>
+      <span className="text-sm text-ink">Discard this lab? {warning ?? 'Nothing from it will be saved to history.'}</span>
       <Button type="button" variant="secondary" className="h-8" busy={end.isPending} onClick={() => end.mutate()}>
-        End lab
+        Discard lab
       </Button>
       <Button type="button" variant="ghost" className="h-8" onClick={() => setConfirming(false)}>
         Keep going

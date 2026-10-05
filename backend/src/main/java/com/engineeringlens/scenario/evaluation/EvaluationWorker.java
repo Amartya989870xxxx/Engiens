@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -28,6 +29,7 @@ import com.engineeringlens.analysis.ai.AiUnavailableException;
 import com.engineeringlens.analysis.context.DeveloperProfile;
 import com.engineeringlens.analysis.review.ReviewPersonalizer;
 import com.engineeringlens.analysis.review.model.ReviewDocument.Personalization;
+import com.engineeringlens.common.ApiException;
 import com.engineeringlens.scenario.EvaluationStatus;
 import com.engineeringlens.scenario.Scenario;
 import com.engineeringlens.scenario.ScenarioAttempt;
@@ -179,6 +181,36 @@ public class EvaluationWorker {
         }
     }
 
+    /**
+     * The user finishes the lab before submitting every scenario: the assessment covers what was submitted.
+     * Every submitted answer must already be evaluated, so nothing in progress is lost or left behind.
+     */
+    public void finishEarly(UUID labId) {
+        transaction.executeWithoutResult(tx -> {
+            ScenarioLab lab = labs.findById(labId).orElseThrow();
+            if (lab.getStatus() != ScenarioLabStatus.ACTIVE) {
+                throw new ApiException(HttpStatus.CONFLICT, "SCENARIO_LAB_NOT_ACTIVE", "This lab is no longer open.");
+            }
+            List<ScenarioAttempt> submitted = attempts.findByLabIdOrderByCreatedAtAsc(labId);
+            if (submitted.isEmpty()) {
+                throw new ApiException(HttpStatus.CONFLICT, "SCENARIO_LAB_NOTHING_SUBMITTED",
+                        "Submit at least one scenario to finish the lab, or discard it.");
+            }
+            if (submitted.stream().anyMatch(a -> a.getEvaluationStatus() == EvaluationStatus.PENDING)) {
+                throw new ApiException(HttpStatus.CONFLICT, "SCENARIO_EVALUATIONS_PENDING",
+                        "Some answers are still being evaluated. Finish the lab once they're done.");
+            }
+            if (submitted.stream().anyMatch(a -> a.getEvaluationStatus() == EvaluationStatus.FAILED)) {
+                throw new ApiException(HttpStatus.CONFLICT, "SCENARIO_EVALUATIONS_FAILED",
+                        "An evaluation failed. Try it again before finishing the lab.");
+            }
+            lab.startFinalizing();
+            labs.saveAndFlush(lab); // optimistic lock: a concurrent completion can't also finalise it
+        });
+        log.info("Scenario lab finished early: lab={}", labId);
+        executor.execute(() -> finalizeLab(labId));
+    }
+
     /** Lets a user retry finalising after it failed. */
     public void retryFinalization(UUID labId) {
         Boolean retry = transaction.execute(tx -> {
@@ -203,7 +235,12 @@ public class EvaluationWorker {
             AiModelRouter.Routed<LabSummary> summary = router.generate(summaryPrompt, settings(SUMMARY_MAX_OUTPUT_TOKENS, "low"),
                     validator::summary, problem -> prompts.repair(summaryPrompt, problem));
             LabTeaching teaching = teach(lab, summary.value(), evaluated);
-            List<String> limitations = new ArrayList<>(summary.value().limitations());
+            List<String> limitations = new ArrayList<>();
+            if (evaluated.size() < lab.getScenarioCount()) {
+                limitations.add("Finished early: " + evaluated.size() + " of " + lab.getScenarioCount()
+                        + " scenarios were submitted, and only those are assessed.");
+            }
+            limitations.addAll(summary.value().limitations());
             if (teaching == null) {
                 limitations.add(TEACHING_UNAVAILABLE);
             }
@@ -256,6 +293,9 @@ public class EvaluationWorker {
         List<EvaluatedScenario> list = new ArrayList<>();
         for (Scenario s : scenarios.findByLabIdOrderByPositionAsc(lab.getId())) {
             ScenarioAttempt a = byScenario.get(s.getId());
+            if (a == null) {
+                continue; // finished early: unsubmitted scenarios aren't assessed
+            }
             RunResult run = a.getRunResultJson() == null ? null : json.readValue(a.getRunResultJson(), RunResult.class);
             list.add(new EvaluatedScenario(s.getId().toString(), s.getTitle(), s.getCategory().name(), a.getMode().name(),
                     run == null ? "not run" : run.status() + " " + run.passed() + "/" + run.total(),

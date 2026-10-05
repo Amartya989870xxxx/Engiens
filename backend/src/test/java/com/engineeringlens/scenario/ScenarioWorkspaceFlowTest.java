@@ -204,6 +204,44 @@ class ScenarioWorkspaceFlowTest extends ScenarioFlowSupport {
     }
 
     @Test
+    void aLabCanBeFinishedEarlyAndIsSavedToHistoryWithWhatWasSubmitted() throws Exception {
+        Lab lab = lab("ws-finish@example.com");
+        mvc.perform(post("/api/scenario-labs/" + lab.labId() + "/finish").header("Authorization", lab.auth()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCENARIO_LAB_NOTHING_SUBMITTED"));
+
+        submit(lab, 0, "CODE", ScenarioFixtures.FIXED, "Return the existing order on a retry.").andExpect(status().isOk());
+        prompts.clear();
+        mvc.perform(post("/api/scenario-labs/" + lab.labId() + "/finish").header("Authorization", lab.auth())).andExpect(status().isAccepted());
+
+        mvc.perform(get("/api/scenario-labs/" + lab.labId()).header("Authorization", lab.auth())).andExpect(jsonPath("$.status").value("COMPLETED"));
+        mvc.perform(get("/api/scenario-labs/active").header("Authorization", lab.auth())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/repositories/" + lab.repoId() + "/scenario-labs").header("Authorization", lab.auth()))
+                .andExpect(jsonPath("$[0].id").value(lab.labId()))
+                .andExpect(jsonPath("$[0].scenariosCompleted").value(1))
+                .andExpect(jsonPath("$[0].scenarioCount").value(5));
+        mvc.perform(get("/api/scenario-labs/" + lab.labId() + "/assessment").header("Authorization", lab.auth()))
+                .andExpect(jsonPath("$.scenarios.length()").value(1))
+                .andExpect(jsonPath("$.assessment.limitations[0]").value("Finished early: 1 of 5 scenarios were submitted, and only those are assessed."));
+        AiPrompt summary = prompts.stream().filter(ScenarioFixtures::isSummary).findFirst().orElseThrow();
+        assertThat(summary.user()).contains("finished the lab early: 1 of 5");
+        mvc.perform(post("/api/scenario-labs/" + lab.labId() + "/finish").header("Authorization", lab.auth()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCENARIO_LAB_NOT_ACTIVE"));
+
+        String mallory = register("ws-finish-intruder@example.com");
+        mvc.perform(post("/api/scenario-labs/" + lab.labId() + "/finish").header("Authorization", mallory)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aLabWithAFailedEvaluationCantBeFinishedUntilItIsRetried() throws Exception {
+        Lab lab = lab("ws-finish-failed@example.com");
+        answers = p -> ScenarioFixtures.isAssess(p) ? "not json" : defaultAnswer(p);
+        submit(lab, 0, "APPROACH", null, APPROACH).andExpect(jsonPath("$.evaluationStatus").value("FAILED"));
+        mvc.perform(post("/api/scenario-labs/" + lab.labId() + "/finish").header("Authorization", lab.auth()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SCENARIO_EVALUATIONS_FAILED"));
+        mvc.perform(get("/api/scenario-labs/" + lab.labId()).header("Authorization", lab.auth())).andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
     void submissionsAreValidated() throws Exception {
         Lab lab = lab("ws-validation@example.com");
         submit(lab, 0, "APPROACH", null, "too short").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("APPROACH_REQUIRED"));
