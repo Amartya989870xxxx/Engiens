@@ -4,7 +4,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { createLab, getLabCapacity, getRecentReviews, getReview, type ScenarioLab, type ScenarioRole, type Seniority } from '../api'
 import { ChoiceCard } from '../profile/ChoiceCard'
 import { TagSelect } from '../profile/TagSelect'
-import { Button, ErrorBanner, fieldError, inputClass, labelClass } from '../ui'
+import { Button, ErrorBanner, inputClass, labelClass } from '../ui'
+import { fieldError } from '../errors'
 import { COUNTS, ROLE_BY_LABEL, ROLE_LABELS, SENIORITY } from './options'
 
 const ROLE_OPTIONS = Object.values(ROLE_LABELS)

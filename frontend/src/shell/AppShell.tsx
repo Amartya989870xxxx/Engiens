@@ -3,17 +3,17 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, getRecentReviews, getRepositories, type Profile } from '../api'
-import { useAuth } from '../auth'
+import { useAuth } from '../useAuth'
 import { describeLevel } from '../profile/options'
 import { ChartIcon, CloseIcon, ComposeIcon, FlaskIcon, LogOutIcon, MenuIcon, UserIcon } from './icons'
 
 /** Signed-in layout: navigation sidebar on the left, the current page on the right. */
 export function AppShell() {
-  const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
-
-  // On phones the sidebar is a drawer; close it whenever the user navigates.
-  useEffect(() => setMenuOpen(false), [location.key])
+  // On phones the sidebar is a drawer. It stays open only on the page where it was opened: navigating closes it.
+  const [openOn, setOpenOn] = useState<string | null>(null)
+  const menuOpen = openOn === location.key
+  const setMenuOpen = (open: boolean) => setOpenOn(open ? location.key : null)
 
   return (
     <div className="min-h-screen bg-canvas">

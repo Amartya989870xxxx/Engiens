@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth'
+import { useAuth } from '../useAuth'
 import { Button, ErrorBanner } from '../ui'
 import { initialDraft, saveBeforeLeaving, STEP_COUNT, stepError, toRequest, type Draft } from '../profile/draft'
 import { useGitHubLookup, useKeepDraftOnExpiry, useRestoredDraft, useSaveProfile } from '../profile/profileHooks'

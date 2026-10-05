@@ -64,7 +64,3 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
     </section>
   )
 }
-
-export function fieldError(error: unknown, field: string) {
-  return error instanceof ApiError ? error.fieldErrors[field] : undefined
-}

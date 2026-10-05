@@ -1,18 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { AuthContext, type AuthState } from './useAuth'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, SESSION_EXPIRED_EVENT, tokenStore, type AuthResponse, type User } from './api'
 
-type AuthState = {
-  user: User | null
-  loading: boolean
-  /** True after the server rejected a saved login (usually because it expired). */
-  sessionExpired: boolean
-  login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
-  logout: () => void
-}
-
-const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
@@ -77,10 +67,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
 }

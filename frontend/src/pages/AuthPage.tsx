@@ -2,8 +2,9 @@ import { BRAND } from '../brand'
 import { Logo } from '../shell/Logo'
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth'
-import { Button, Card, ErrorBanner, Field, fieldError } from '../ui'
+import { useAuth } from '../useAuth'
+import { Button, Card, ErrorBanner, Field } from '../ui'
+import { fieldError } from '../errors'
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { user, login, register, sessionExpired } = useAuth()

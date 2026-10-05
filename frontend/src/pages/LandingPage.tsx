@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../auth'
+import { useAuth } from '../useAuth'
 import { BRAND } from '../brand'
 
 /** The eight review dimensions from the product's review rubric. */
