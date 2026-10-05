@@ -11,8 +11,10 @@ import com.engineeringlens.scenario.Seniority;
  * One completed lab in a repository's history: just enough for a compact list. The full assessment is
  * fetched only when it's opened.
  *
- * @param number 1 for the repository's first completed lab, 2 for the next…
+ * @param number             1 for the repository's first completed lab, 2 for the next…
+ * @param scenarioCount      how many were requested
+ * @param scenariosGenerated how many existed (fewer than requested when generation ended early)
  */
 public record LabHistoryItem(UUID id, int number, List<ScenarioRole> roles, Seniority seniority, int scenarioCount, int scenariosCompleted,
-        String commitSha, UUID reviewId, Instant completedAt) {
+        String commitSha, UUID reviewId, Instant completedAt, int scenariosGenerated) {
 }

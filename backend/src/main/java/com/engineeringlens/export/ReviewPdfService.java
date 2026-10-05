@@ -182,7 +182,9 @@ public class ReviewPdfService {
         } else {
             pdf.keyValues(labs.stream().map(l -> new String[] { "Lab #" + l.number(), String.join(", ",
                     l.roles().stream().map(role -> role.label()).toList()) + "  ·  " + l.seniority().label() + "  ·  " + l.scenariosCompleted()
-                    + " of " + l.scenarioCount() + " scenarios  ·  " + Words.date(l.completedAt()) }).toList());
+                    + " of " + l.scenariosGenerated() + " scenarios"
+                    + (l.scenariosGenerated() < l.scenarioCount() ? " (" + l.scenariosGenerated() + " of " + l.scenarioCount() + " generated)" : "")
+                    + "  ·  " + Words.date(l.completedAt()) }).toList());
         }
     }
 

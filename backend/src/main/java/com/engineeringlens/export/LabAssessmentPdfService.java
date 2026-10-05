@@ -50,7 +50,8 @@ public class LabAssessmentPdfService {
         meta.add(new String[] { "Commit", lab.commitSha() });
         meta.add(new String[] { "Roles", String.join(", ", lab.roles().stream().map(r -> r.label()).toList()) });
         meta.add(new String[] { "Seniority", lab.seniority().label() });
-        meta.add(new String[] { "Scenarios", lab.scenarios().size() + " of " + lab.scenarioCount() + " completed" });
+        meta.add(new String[] { "Scenarios", lab.scenarios().size() + " of " + lab.scenariosGenerated() + " completed"
+                + (lab.scenariosGenerated() < lab.scenarioCount() ? " (" + lab.scenariosGenerated() + " of " + lab.scenarioCount() + " generated)" : "") });
         meta.add(new String[] { "Completed", Words.date(lab.completedAt()) });
         if (a.personalizedFor() != null) {
             meta.add(new String[] { "Learning points for", a.personalizedFor() });

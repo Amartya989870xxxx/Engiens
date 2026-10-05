@@ -157,7 +157,7 @@ class ScenarioGenerationTest extends ScenarioFlowSupport {
         String repoId = importRepo(auth, "asha", "orders");
         AtomicInteger plans = new AtomicInteger();
         answers = p -> ScenarioFixtures.isPlan(p) && plans.incrementAndGet() == 1
-                ? ScenarioFixtures.plan(p).replace("app/services/orders.py", "app/services/payments.py") : defaultAnswer(p);
+                ? ScenarioFixtures.plan(p).replaceAll("\"file\":\"[^\"]+\"", "\"file\":\"app/services/payments.py\"") : defaultAnswer(p);
 
         String labId = startLab(auth, "\"repositoryId\":\"" + repoId + "\"");
 

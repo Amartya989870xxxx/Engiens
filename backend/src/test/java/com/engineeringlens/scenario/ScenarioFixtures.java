@@ -42,7 +42,13 @@ public final class ScenarioFixtures {
         return isBuild(p) && p.system().contains("APPROACH-ONLY SCENARIO");
     }
 
-    /** A plan with exactly the requested number of outlines, all grounded in the orders service. */
+    /** Categories and files the fake plan rotates through, like a sensible model spreading a large lab. */
+    private static final List<String> CATEGORIES = List.of("CONCURRENCY_CONSISTENCY", "ERROR_HANDLING", "API_RELIABILITY", "TESTING_GAP",
+            "SECURITY", "DATABASE_CORRECTNESS", "PRODUCTION_READINESS", "CORRECTNESS_BUG");
+    private static final List<String> GROUNDING = List.of("app/services/orders.py", "app/main.py", "tests/test_orders.py",
+            "requirements.txt", "README.md");
+
+    /** A plan with exactly the requested number of outlines, spread over categories and the repository's files. */
     public static String plan(AiPrompt prompt) {
         Matcher count = COUNT.matcher(prompt.system());
         Matcher role = ROLE.matcher(prompt.system());
@@ -58,7 +64,7 @@ public final class ScenarioFixtures {
             o.put("key", "S" + i);
             o.put("title", "Prevent duplicate orders, variant " + i);
             o.put("role", r);
-            o.put("category", "CONCURRENCY_CONSISTENCY");
+            o.put("category", CATEGORIES.get((i - 1) % CATEGORIES.size()));
             o.put("difficulty", "INTERMEDIATE");
             o.put("mode", code ? "CODE" : "APPROACH_ONLY");
             if (code) {
@@ -68,9 +74,9 @@ public final class ScenarioFixtures {
             }
             o.put("problem", "A retried checkout request stores the same order twice.");
             ObjectNode g = o.putArray("groundedIn").addObject();
-            g.put("file", "app/services/orders.py");
+            g.put("file", GROUNDING.get((i - 1) % GROUNDING.size()));
             g.put("lineStart", 1);
-            g.put("lineEnd", 3);
+            g.put("lineEnd", 1);
             g.put("why", "place() appends without checking for an existing order");
             o.putArray("expectedConcepts").add("idempotency");
             o.put("whyItFitsTheLevel", "A contained fix with a real trade-off.");

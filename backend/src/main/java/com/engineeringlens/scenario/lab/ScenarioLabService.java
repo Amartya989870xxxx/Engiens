@@ -58,10 +58,12 @@ public class ScenarioLabService {
     private final AnalysisPreparationService preparation;
     private final ScenarioGenerationWorker generation;
     private final Executor executor;
+    private final com.engineeringlens.analysis.ai.AiModelRouter router;
 
     public ScenarioLabService(ScenarioLabRepository labs, ScenarioRepository scenarios, ScenarioAttemptRepository attempts,
             ImportedRepoRepository repositories, ReviewRunRepository reviewRuns, RepositoryImportService importer,
-            AnalysisPreparationService preparation, ScenarioGenerationWorker generation, @Qualifier("scenarioExecutor") Executor executor) {
+            AnalysisPreparationService preparation, ScenarioGenerationWorker generation, @Qualifier("scenarioExecutor") Executor executor,
+            com.engineeringlens.analysis.ai.AiModelRouter router) {
         this.labs = labs;
         this.scenarios = scenarios;
         this.attempts = attempts;
@@ -71,6 +73,7 @@ public class ScenarioLabService {
         this.preparation = preparation;
         this.generation = generation;
         this.executor = executor;
+        this.router = router;
     }
 
     /** Where a lab's snapshot comes from: the repository, the prepared analysis, its commit and the review (if any). */
@@ -114,6 +117,17 @@ public class ScenarioLabService {
             labs.save(lab);
         }
         return toResponse(labs.findById(labId).orElse(lab), source.repository());
+    }
+
+    /**
+     * Whether the preferred AI model is available right now. When it isn't (e.g. a daily quota is spent), larger labs
+     * run on fallback models and take longer; the setup screen says so before the user starts one.
+     */
+    public record Capacity(boolean preferredModelAvailable) {
+    }
+
+    public Capacity capacity() {
+        return new Capacity(router.preferredModelAvailable());
     }
 
     public ScenarioLabResponse get(UUID userId, UUID labId) {
@@ -182,16 +196,15 @@ public class ScenarioLabService {
     }
 
     ScenarioLabResponse toResponse(ScenarioLab lab, ImportedRepo repo) {
-        List<ScenarioLabResponse.ScenarioSummary> summaries = List.of();
-        if (lab.getStatus() != ScenarioLabStatus.GENERATING) {
-            Map<UUID, ScenarioAttempt> submitted = attempts.findByLabIdOrderByCreatedAtAsc(lab.getId()).stream()
-                    .collect(Collectors.toMap(ScenarioAttempt::getScenarioId, Function.identity()));
-            summaries = scenarios.findByLabIdOrderByPositionAsc(lab.getId()).stream().map(s -> summary(s, submitted.get(s.getId()))).toList();
-        }
+        Map<UUID, ScenarioAttempt> submitted = attempts.findByLabIdOrderByCreatedAtAsc(lab.getId()).stream()
+                .collect(Collectors.toMap(ScenarioAttempt::getScenarioId, Function.identity()));
+        List<ScenarioLabResponse.ScenarioSummary> summaries = scenarios.findByLabIdOrderByPositionAsc(lab.getId()).stream()
+                .map(s -> summary(s, submitted.get(s.getId()))).toList();
         return new ScenarioLabResponse(lab.getId(), lab.getRepositoryId(), repo == null ? null : repo.getGithubRepoName(),
                 repo == null ? null : repo.getGithubUrl(), lab.getReviewId(), lab.getCommitSha(), lab.getRoles(), lab.getSeniority(),
                 lab.getScenarioCount(), lab.getScenariosReady(), lab.getStatus(), lab.getErrorCode(), lab.getErrorMessage(),
-                lab.getCreatedAt(), lab.getCompletedAt(), summaries);
+                lab.getCreatedAt(), lab.getCompletedAt(), summaries, lab.getGenerationStage(), lab.getScenariosRejected(),
+                lab.getGenerationNote());
     }
 
     private static ScenarioLabResponse.ScenarioSummary summary(Scenario s, ScenarioAttempt attempt) {

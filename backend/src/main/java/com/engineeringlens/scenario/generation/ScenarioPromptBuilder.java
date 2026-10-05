@@ -34,9 +34,11 @@ public class ScenarioPromptBuilder {
     private static final int MAX_FILES_PER_SCENARIO = 6;
 
     private final ObjectMapper json;
+    private final ScenarioOutputValidator validator;
 
-    public ScenarioPromptBuilder(ObjectMapper json) {
+    public ScenarioPromptBuilder(ObjectMapper json, ScenarioOutputValidator validator) {
         this.json = json;
+        this.validator = validator;
     }
 
     // ---- step 1: plan ---------------------------------------------------------------------------
@@ -46,6 +48,11 @@ public class ScenarioPromptBuilder {
         s.append("\n# TASK\nPropose exactly ").append(outlines).append(" scenario outlines for this repository (")
                 .append(lab.getScenarioCount()).append(" will be used; the rest are spares, so make every one usable).\n")
                 .append("Vary the categories and the parts of the code they touch. Order them from most to least valuable.\n");
+        int cap = validator.diversityCap(lab.getScenarioCount());
+        if (cap != Integer.MAX_VALUE) {
+            s.append("This is a large lab: at most ").append(cap).append(" outlines may share a category, and at most ").append(cap)
+                    .append(" may have the same first groundedIn file. Spread them across different parts of the repository.\n");
+        }
         s.append(audience(lab));
         s.append("\n# EXECUTION\n");
         if (ctx.executableLanguages().isEmpty()) {

@@ -68,6 +68,12 @@ public class AiModelRouter {
         return list;
     }
 
+    /** Whether the highest-priority configured model can take a request right now (not cooling down or misconfigured). */
+    public boolean preferredModelAvailable() {
+        return candidates().stream().filter(c -> providers.get(c.provider()).configured()).findFirst()
+                .map(c -> health.eligible(c.provider(), c.model())).orElse(false);
+    }
+
     /**
      * @param parse  validates the raw text into a result, throwing {@link InvalidAiOutputException} if invalid
      * @param repair builds a stricter prompt from the validation error, for one repair attempt per model

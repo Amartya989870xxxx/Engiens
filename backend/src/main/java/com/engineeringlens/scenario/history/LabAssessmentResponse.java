@@ -24,7 +24,7 @@ import com.engineeringlens.scenario.workspace.FileContent;
  */
 public record LabAssessmentResponse(UUID id, int number, UUID repositoryId, String repositoryName, String repositoryUrl, UUID reviewId,
         String commitSha, List<ScenarioRole> roles, Seniority seniority, int scenarioCount, Instant createdAt, Instant completedAt,
-        LabAssessment assessment, List<ScenarioResult> scenarios) {
+        LabAssessment assessment, List<ScenarioResult> scenarios, int scenariosGenerated, String generationNote) {
 
     public record ScenarioResult(UUID scenarioId, int position, String title, ScenarioRole role, ScenarioCategory category,
             ScenarioDifficulty difficulty, ExecutionCapability executionCapability, ScenarioLanguage language, ScenarioDocument document,

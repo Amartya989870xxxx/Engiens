@@ -149,6 +149,13 @@ public class EvaluationWorker {
         }
     }
 
+    /** Completes the lab now if every scenario that exists is submitted and evaluated (e.g. when generation ends). */
+    public void finalizeIfComplete(UUID labId) {
+        if (startFinalizing(labId)) {
+            finalizeLab(labId);
+        }
+    }
+
     public void markFailed(UUID attemptId, String code, String message) {
         transaction.executeWithoutResult(tx -> attempts.findById(attemptId).filter(a -> a.getEvaluationStatus() == EvaluationStatus.PENDING)
                 .ifPresent(a -> {
@@ -231,13 +238,17 @@ public class EvaluationWorker {
         try {
             ScenarioLab lab = labs.findById(labId).orElseThrow();
             List<EvaluatedScenario> evaluated = evaluatedScenarios(lab);
-            AiPrompt summaryPrompt = prompts.summarise(lab, evaluated);
+            AiPrompt summaryPrompt = prompts.summarise(lab, evaluated, scenarios.findByLabIdOrderByPositionAsc(labId).size());
             AiModelRouter.Routed<LabSummary> summary = router.generate(summaryPrompt, settings(SUMMARY_MAX_OUTPUT_TOKENS, "low"),
                     validator::summary, problem -> prompts.repair(summaryPrompt, problem));
             LabTeaching teaching = teach(lab, summary.value(), evaluated);
             List<String> limitations = new ArrayList<>();
-            if (evaluated.size() < lab.getScenarioCount()) {
-                limitations.add("Finished early: " + evaluated.size() + " of " + lab.getScenarioCount()
+            int available = scenarios.findByLabIdOrderByPositionAsc(labId).size(); // fewer than requested if generation ended early
+            if (available < lab.getScenarioCount()) {
+                limitations.add("Only " + available + " of the " + lab.getScenarioCount() + " requested scenarios could be generated.");
+            }
+            if (evaluated.size() < available) {
+                limitations.add("Finished early: " + evaluated.size() + " of " + available
                         + " scenarios were submitted, and only those are assessed.");
             }
             limitations.addAll(summary.value().limitations());

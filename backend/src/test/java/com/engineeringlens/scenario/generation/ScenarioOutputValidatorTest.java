@@ -25,8 +25,10 @@ import jakarta.validation.Validation;
 /** Generation output is untrusted: roles, files, modes and code parts are checked against what really exists. */
 class ScenarioOutputValidatorTest {
 
+    private static final GenerationProperties LIMITS = new GenerationProperties(3, 4, java.time.Duration.ofMinutes(10),
+            java.time.Duration.ofSeconds(90), 10);
     private static final ScenarioOutputValidator VALIDATOR = new ScenarioOutputValidator(
-            Validation.buildDefaultValidatorFactory().getValidator());
+            Validation.buildDefaultValidatorFactory().getValidator(), LIMITS);
 
     private static final ScenarioContext CTX = new ScenarioContext(null, new LoadedContext(
             new AnalysisContext(1, null, null, null, Map.of("app/orders.py", "a\nb\nc\n", "deploy/main.tf", "x\n")),

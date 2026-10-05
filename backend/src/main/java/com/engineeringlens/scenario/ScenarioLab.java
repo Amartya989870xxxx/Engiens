@@ -75,6 +75,18 @@ public class ScenarioLab {
     @Column(name = "scenarios_ready", nullable = false)
     private int scenariosReady;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "generation_stage")
+    private GenerationStage generationStage;
+
+    /** Code scenarios that failed validation after a repair and were replaced. */
+    @Column(name = "scenarios_rejected", nullable = false)
+    private int scenariosRejected;
+
+    /** Set when generation ended with fewer scenarios than requested. */
+    @Column(name = "generation_note")
+    private String generationNote;
+
     @Column(name = "error_code")
     private String errorCode;
 
@@ -110,6 +122,7 @@ public class ScenarioLab {
         this.scenarioSchemaVersion = Scenario.SCHEMA_VERSION;
         this.generatorVersion = GENERATOR_VERSION;
         this.status = ScenarioLabStatus.GENERATING;
+        this.generationStage = GenerationStage.PLANNING;
         this.activeUserId = userId;
         this.createdAt = Instant.now();
     }
@@ -120,11 +133,46 @@ public class ScenarioLab {
         scenariosReady++;
     }
 
-    /** Every scenario is validated and saved: the workspace opens. */
-    public void activate() {
+    /** The plan is written; scenarios are now being built and validated (and become workable one by one). */
+    public void startBuilding() {
         requireStatus(ScenarioLabStatus.GENERATING);
+        generationStage = GenerationStage.BUILDING;
+    }
+
+    /** A code scenario failed validation even after a repair and was replaced. */
+    public void scenarioRejected() {
+        requireStatus(ScenarioLabStatus.GENERATING);
+        scenariosRejected++;
+    }
+
+    /** Generation is over and every requested scenario is validated and saved. */
+    public void activate() {
+        activate(null);
+    }
+
+    /**
+     * Generation is over. With fewer scenarios than requested the note says so (e.g. "17 of 20 scenarios
+     * generated."); a lab with no scenario at all must fail instead.
+     */
+    public void activate(String note) {
+        requireStatus(ScenarioLabStatus.GENERATING);
+        if (scenariosReady == 0 && scenarioCount > 0 && note != null) {
+            throw new IllegalStateException("A lab without scenarios can't open");
+        }
         status = ScenarioLabStatus.ACTIVE;
+        generationStage = GenerationStage.DONE;
+        generationNote = note;
         generatedAt = Instant.now();
+    }
+
+    /** The user can work on its saved (validated) scenarios: while generating, or once it's active. */
+    public boolean workable() {
+        return status == ScenarioLabStatus.GENERATING || status == ScenarioLabStatus.ACTIVE;
+    }
+
+    /** How many scenarios actually exist: all requested ones, or fewer when generation ended early. */
+    public int scenariosAvailable() {
+        return status == ScenarioLabStatus.GENERATING || generationNote != null ? scenariosReady : scenarioCount;
     }
 
     /** All scenarios are submitted and evaluated; the final assessment is being written. */
@@ -199,6 +247,9 @@ public class ScenarioLab {
     public ScenarioLabStatus getStatus() { return status; }
     public UUID getActiveUserId() { return activeUserId; }
     public int getScenariosReady() { return scenariosReady; }
+    public GenerationStage getGenerationStage() { return generationStage; }
+    public int getScenariosRejected() { return scenariosRejected; }
+    public String getGenerationNote() { return generationNote; }
     public String getErrorCode() { return errorCode; }
     public String getErrorMessage() { return errorMessage; }
     public long getVersion() { return version; }

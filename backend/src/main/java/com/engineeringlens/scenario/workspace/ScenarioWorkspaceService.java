@@ -88,7 +88,7 @@ public class ScenarioWorkspaceService {
 
     public ScenarioDetailResponse detail(UUID userId, UUID labId, UUID scenarioId) {
         ScenarioLab lab = labService.owned(userId, labId);
-        if (lab.getStatus() != ScenarioLabStatus.ACTIVE && lab.getStatus() != ScenarioLabStatus.FINALIZING) {
+        if (!lab.workable() && lab.getStatus() != ScenarioLabStatus.FINALIZING) {
             throw notActive(); // a finished lab is read as an assessment, never reopened as a workspace
         }
         Scenario s = scenario(lab, scenarioId);
@@ -169,7 +169,7 @@ public class ScenarioWorkspaceService {
         try {
             attempt = transaction.execute(tx -> {
                 ScenarioLab current = labs.findById(labId).orElseThrow();
-                if (current.getStatus() != ScenarioLabStatus.ACTIVE) {
+                if (!current.workable()) {
                     throw notActive();
                 }
                 Scenario fresh = scenarios.findById(s.getId()).orElseThrow();
@@ -272,7 +272,7 @@ public class ScenarioWorkspaceService {
 
     private ScenarioLab activeLab(UUID userId, UUID labId) {
         ScenarioLab lab = labService.owned(userId, labId);
-        if (lab.getStatus() != ScenarioLabStatus.ACTIVE) {
+        if (!lab.workable()) { // generating labs too: their saved scenarios are already validated and ready
             throw notActive();
         }
         return lab;

@@ -34,6 +34,11 @@ public class ScenarioLabController {
         return service.active(userId(jwt)).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
     }
 
+    @GetMapping("/api/scenario-labs/capacity")
+    ScenarioLabService.Capacity capacity() {
+        return service.capacity();
+    }
+
     @GetMapping("/api/scenario-labs/{id}")
     ScenarioLabResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return service.get(userId(jwt), id);

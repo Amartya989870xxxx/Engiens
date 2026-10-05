@@ -123,7 +123,7 @@ public class EvaluationPromptBuilder {
     }
 
     /** The lab's overall picture from the verdicts alone. No code, no developer. */
-    public AiPrompt summarise(ScenarioLab lab, List<EvaluatedScenario> evaluated) {
+    public AiPrompt summarise(ScenarioLab lab, List<EvaluatedScenario> evaluated, int available) {
         String system = """
                 # ROLE
                 You are a senior engineer writing the overall assessment of an engineering scenario lab. Each scenario has
@@ -141,10 +141,12 @@ public class EvaluationPromptBuilder {
                  "overallAssessment": {"summary": str (3-5 sentences), "engineeringLevel": str, "confidence": "HIGH"|"MEDIUM"|"LOW"},
                  "strengths": [str], "growthAreas": [str], "limitations": [str]}
                 """.formatted(lab.getSeniority().label(), lab.getRoles().stream().map(r -> r.label()).toList());
-        String scope = evaluated.size() < lab.getScenarioCount()
-                ? "The developer finished the lab early: " + evaluated.size() + " of " + lab.getScenarioCount()
-                        + " scenarios were submitted. Assess only these, and treat the small sample as a limitation.\n\n"
-                : "";
+        String scope = (available < lab.getScenarioCount()
+                ? "Only " + available + " of the " + lab.getScenarioCount() + " requested scenarios could be generated.\n" : "")
+                + (evaluated.size() < available
+                        ? "The developer finished the lab early: " + evaluated.size() + " of " + available
+                                + " scenarios were submitted. Assess only these, and treat the small sample as a limitation.\n" : "");
+        scope = scope.isEmpty() ? "" : scope + "\n";
         return new AiPrompt(system, scope + "# EVALUATED SCENARIOS\n" + json.writeValueAsString(evaluated) + "\n");
     }
 

@@ -82,7 +82,7 @@ public abstract class ScenarioFlowSupport {
     protected AiModelHealthRepository health;
 
     /** Every prompt the "model" received. */
-    protected final List<AiPrompt> prompts = new ArrayList<>();
+    protected final List<AiPrompt> prompts = java.util.Collections.synchronizedList(new ArrayList<>());
 
     /** What the "model" answers; by default valid reviews, scenario plans and scenarios. */
     protected Function<AiPrompt, String> answers = ScenarioFlowSupport::defaultAnswer;
@@ -159,6 +159,14 @@ public abstract class ScenarioFlowSupport {
         String body = mvc.perform(post("/api/repositories/" + repoId + "/reviews").header("Authorization", auth))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.id");
+    }
+
+    /** Starts a lab and returns its id (generation runs inline unless a test enables async). */
+    protected String startLab(String auth, String source, int count) throws Exception {
+        String body = mvc.perform(post("/api/scenario-labs").header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                .content("{" + source + ",\"roles\":[\"BACKEND_ENGINEER\"],\"seniority\":\"SDE2\",\"scenarioCount\":" + count + "}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.id");
     }
 

@@ -47,9 +47,16 @@ public class ScenarioOutputValidator {
             .build();
 
     private final Validator validator;
+    private final GenerationProperties limits;
 
-    public ScenarioOutputValidator(Validator validator) {
+    public ScenarioOutputValidator(Validator validator, GenerationProperties limits) {
         this.validator = validator;
+        this.limits = limits;
+    }
+
+    /** Larger labs must spread across categories and files; this is the most outlines one category or main file may take. */
+    int diversityCap(int scenarioCount) {
+        return scenarioCount >= limits.diversityFromCount() ? Math.max(2, (int) Math.ceil(scenarioCount / 4.0)) : Integer.MAX_VALUE;
     }
 
     /** At least {@code needed} usable outlines, each with real evidence, an allowed role and a feasible mode. */
@@ -61,6 +68,10 @@ public class ScenarioOutputValidator {
         boolean broad = lab.getRoles().contains(ScenarioRole.BROAD_ENGINEERING);
         Set<String> titles = new HashSet<>();
         List<ScenarioPlan.Outline> usable = new ArrayList<>();
+        int cap = diversityCap(lab.getScenarioCount());
+        Map<Object, Integer> perCategory = new java.util.HashMap<>();
+        Map<String, Integer> perFile = new java.util.HashMap<>();
+        int overCap = 0;
         for (ScenarioPlan.Outline o : plan.outlines()) {
             boolean roleAllowed = broad ? o.role() != ScenarioRole.BROAD_ENGINEERING : lab.getRoles().contains(o.role());
             List<ScenarioPlan.Grounding> grounding = o.groundedIn().stream().map(g -> grounding(g, ctx.loaded()))
@@ -68,6 +79,13 @@ public class ScenarioOutputValidator {
             if (!roleAllowed || grounding.isEmpty() || !titles.add(o.title().strip().toLowerCase())) {
                 continue;
             }
+            String mainFile = grounding.get(0).file();
+            if (perCategory.getOrDefault(o.category(), 0) >= cap || perFile.getOrDefault(mainFile, 0) >= cap) {
+                overCap++;
+                continue; // keeps a large lab from becoming twenty variations of one problem
+            }
+            perCategory.merge(o.category(), 1, Integer::sum);
+            perFile.merge(mainFile, 1, Integer::sum);
             // A CODE outline in a language the sandbox can't run here becomes a reasoning scenario rather than being lost.
             boolean code = o.mode() == ExecutionCapability.CODE && o.language() != null && ctx.executableLanguages().contains(o.language());
             usable.add(new ScenarioPlan.Outline(o.key(), o.title().strip(), o.role(), o.category(), o.difficulty(),
@@ -77,7 +95,8 @@ public class ScenarioOutputValidator {
         if (usable.size() < needed) {
             throw new InvalidAiOutputException("Only " + usable.size() + " outlines are usable but at least " + needed
                     + " are needed. Every outline needs a unique title, one of the allowed roles, and groundedIn files copied exactly "
-                    + "from the FILE CONTENTS headers.");
+                    + "from the FILE CONTENTS headers." + (overCap > 0 ? " Vary the scenarios: at most " + cap
+                            + " outlines may share a category, and at most " + cap + " may have the same first groundedIn file." : ""));
         }
         return new ScenarioPlan(plan.scenarioPlanSchemaVersion(), plan.repositorySummary(), List.copyOf(usable));
     }

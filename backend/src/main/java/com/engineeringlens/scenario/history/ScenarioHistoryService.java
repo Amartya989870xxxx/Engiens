@@ -72,7 +72,8 @@ public class ScenarioHistoryService {
         for (int i = 0; i < completed.size(); i++) {
             ScenarioLab lab = completed.get(i);
             items.add(new LabHistoryItem(lab.getId(), completed.size() - i, lab.getRoles(), lab.getSeniority(), lab.getScenarioCount(),
-                    attempts.findByLabIdOrderByCreatedAtAsc(lab.getId()).size(), lab.getCommitSha(), lab.getReviewId(), lab.getCompletedAt()));
+                    attempts.findByLabIdOrderByCreatedAtAsc(lab.getId()).size(), lab.getCommitSha(), lab.getReviewId(), lab.getCompletedAt(),
+                    lab.scenariosAvailable()));
         }
         return items;
     }
@@ -102,7 +103,8 @@ public class ScenarioHistoryService {
         int number = completed.size() - completed.stream().map(ScenarioLab::getId).toList().indexOf(lab.getId());
         return new LabAssessmentResponse(lab.getId(), number, lab.getRepositoryId(), repo == null ? null : repo.getGithubRepoName(),
                 repo == null ? null : repo.getGithubUrl(), lab.getReviewId(), lab.getCommitSha(), lab.getRoles(), lab.getSeniority(),
-                lab.getScenarioCount(), lab.getCreatedAt(), lab.getCompletedAt(), assessment, results);
+                lab.getScenarioCount(), lab.getCreatedAt(), lab.getCompletedAt(), assessment, results, lab.scenariosAvailable(),
+                lab.getGenerationNote());
     }
 
     /**
