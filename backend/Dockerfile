@@ -1,8 +1,9 @@
 # Engiens backend: production image. Base images are pinned by multi-architecture digest (x86 and ARM64/Ampere).
 #
-# Build:  docker build -t engiens-backend:<git-sha> backend
-# Runs with the prod profile, as a non-root user. The Docker CLI is included because the backend starts the Scenario
-# Lab sandbox containers through the host's Docker socket (mounted by docker-compose.prod.yml).
+# Build:  docker build -t engiens-backend:<git-sha> backend      (Railway builds it from backend/railway.toml)
+# Runs with the prod profile, as a non-root user, on $PORT (8080 by default). The Docker CLI is included so the same
+# image can run Scenario Lab code where a Docker daemon is available (a host that mounts /var/run/docker.sock). On
+# platforms without Docker, such as Railway, set SCENARIO_EXECUTION_ENABLED=false: labs are then approach-only.
 
 # ---- build: compile and package the jar (tests run in CI, not in the image build) ----
 FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS build
@@ -27,5 +28,5 @@ ENV SPRING_PROFILES_ACTIVE=prod \
 USER engiens
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD curl -fsS http://localhost:8080/actuator/health || exit 1
+  CMD curl -fsS "http://localhost:${PORT:-8080}/actuator/health" || exit 1
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

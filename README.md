@@ -62,9 +62,10 @@ id is stored, and short-lived access tokens are minted per request and never per
 
 ## Deployment
 
-Production runs at zero cost: the frontend on Vercel, and the backend, PostgreSQL and the Docker sandbox on one
-Oracle Cloud Always Free ARM64 VM behind Caddy (HTTPS). Files and the step-by-step runbook are in
-[`deploy/`](deploy/README.md).
+The frontend is deployed on Vercel and the backend with its managed PostgreSQL on Railway; the step-by-step runbook
+and configuration are in [`deploy/`](deploy/README.md). Railway can't start Docker containers, so the deployed
+Scenario Lab is approach-only (scenarios answered in writing, and the setup screen says so); executable scenarios with
+Run and hidden checks work wherever the backend runs next to Docker, such as local development.
 
 ## Tests
 
