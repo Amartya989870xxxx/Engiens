@@ -2,7 +2,7 @@
 
 A developer-learning platform: build an engineering profile, get a personalized review of your GitHub repository, and practice production/scaling scenarios.
 
-**Current status:** registration, engineering profile, GitHub repository import (public and private via a GitHub App), repository analysis, AI engineering reviews, Scenario Lab (repository-specific scenarios with sandboxed code execution and AI evaluation) and PDF export are working. Progress tracking and deployment are next.
+**Current status:** registration, engineering profile, GitHub repository import (public and private via a GitHub App), repository analysis, AI engineering reviews, Scenario Lab (repository-specific scenarios with sandboxed code execution and AI evaluation), PDF export and Progress (evidence-based indicators across reviews and labs) are working. Deployment is next.
 
 ## Stack
 
@@ -81,8 +81,15 @@ Modular monolith (`backend/src/main/java/com/engineeringlens`):
 | `analysis.ai` | provider-neutral AI layer: Gemini and Groq providers, model router with retries, fallback and per-model cooldowns |
 | `analysis.review` | AI engineering review: rubric, prompt, output validation, background runs, persistence (`/api/repositories/{id}/reviews`, `/api/reviews`) |
 | `scenario` | Scenario Lab: lab lifecycle (`lab`), generation and harness validation (`generation`), sandbox (`execution`), workspace/run/submit (`workspace`), evaluation (`evaluation`), history (`history`) |
+| `progress` | Progress: deterministic, evidence-based indicators per rubric area from stored reviews and completed labs; no new tables, no AI calls (`/api/progress`, `/api/progress/history`) |
 | `export` | server-side PDFs of reviews and lab assessments, from persisted data |
 | `common` | shared error model, global exception handler, PDF typesetting |
+
+Progress is calculated on read from the reviews and labs already stored: the 16 review rubric dimensions are the only
+engineering areas (every Scenario Lab category maps onto one), reviews of the same commit count once, low-confidence
+assessments are shown but not counted, and a better rating at a later commit is reported as a project-level change.
+Developer-level "improving" needs Scenario Lab gains across labs or gains in more than one repository. Every
+indicator shows its reason and the evidence behind it; there is no score.
 
 Controllers stay thin, business rules live in services, DTOs are used at the API boundary, and every failure returns the same `ApiError` JSON shape. Schema changes go through Flyway migrations in `src/main/resources/db/migration`.
 
