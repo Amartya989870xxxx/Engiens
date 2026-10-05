@@ -24,8 +24,8 @@ import com.engineeringlens.scenario.generation.ScenarioGenerationWorker;
 import com.jayway.jsonpath.JsonPath;
 
 /**
- * 10-scenario labs and progressive generation: scenarios are workable as soon as they're validated, generation can end
- * partially (honestly), an empty lab fails, and a large plan must be varied.
+ * 10- and 20-scenario labs and progressive generation: scenarios are workable as soon as they're validated, generation
+ * can end partially (honestly), an empty lab fails, and a large plan must be varied without leaving the chosen role.
  */
 class ScenarioScaleTest extends ScenarioFlowSupport {
 
@@ -74,6 +74,103 @@ class ScenarioScaleTest extends ScenarioFlowSupport {
         assertThat(perCategory.values()).allSatisfy(n -> assertThat(n).isLessThanOrEqualTo(3));
         AiPrompt plan = prompts.stream().filter(ScenarioFixtures::isPlan).findFirst().orElseThrow();
         assertThat(plan.system()).contains("Propose exactly 14 scenario outlines", "This is a large lab: at most 3 outlines may share a category");
+    }
+
+    @Test
+    void aTwentyScenarioLabIsGeneratedValidatedVariedAndStaysOnRole() throws Exception {
+        setUpRepo("scale-twenty@example.com");
+        String labId = startLab(auth, "\"repositoryId\":\"" + repoId + "\"", 20);
+
+        mvc.perform(get(labUrl(labId)).header("Authorization", auth))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.scenarioCount").value(20))
+                .andExpect(jsonPath("$.scenariosReady").value(20))
+                .andExpect(jsonPath("$.generationStage").value("DONE"))
+                .andExpect(jsonPath("$.generationNote").doesNotExist());
+        List<Scenario> saved = scenarios.findByLabIdOrderByPositionAsc(UUID.fromString(labId));
+        assertThat(saved).extracting(Scenario::getPosition).containsExactlyElementsOf(java.util.stream.IntStream.rangeClosed(1, 20).boxed().toList());
+        assertThat(saved).allSatisfy(s -> {
+            assertThat(s.getRole()).isEqualTo(ScenarioRole.BACKEND_ENGINEER);
+            assertThat(s.getCategory()).isNotIn(ScenarioCategory.FRONTEND_CLIENT, ScenarioCategory.INFRASTRUCTURE_DEPLOYMENT);
+            assertThat(s.getDifficulty()).isIn(ScenarioDifficulty.INTERMEDIATE, ScenarioDifficulty.ADVANCED); // SDE2
+            assertThat(s.getExecutionCapability()).isEqualTo(ExecutionCapability.CODE);
+        });
+        Map<ScenarioCategory, Long> perCategory = saved.stream().collect(Collectors.groupingBy(Scenario::getCategory, Collectors.counting()));
+        assertThat(perCategory.values()).allSatisfy(n -> assertThat(n).isLessThanOrEqualTo(5));
+        AiPrompt plan = prompts.stream().filter(ScenarioFixtures::isPlan).findFirst().orElseThrow();
+        assertThat(plan.system()).contains("Propose exactly 28 scenario outlines", "at most 5 outlines may share a category")
+                .doesNotContain("\"FRONTEND_CLIENT\"");
+    }
+
+    @Test
+    void inATwentyScenarioLabTheUserWorksWhileGenerationContinuesAndNothingIsFabricated() throws Exception {
+        setUpRepo("scale-twenty-progressive@example.com");
+        List<String> seen = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger builds = new AtomicInteger();
+        answers = p -> {
+            if (ScenarioFixtures.isBuild(p) && builds.incrementAndGet() == 6) {
+                try {
+                    workOnFirstReadyScenario(seen);
+                    String lab = mvc.perform(get("/api/scenario-labs/active").header("Authorization", auth)).andReturn().getResponse()
+                            .getContentAsString();
+                    String first = JsonPath.<List<String>>read(lab, "$.scenarios[*].id").get(0);
+                    var again = mvc.perform(post(labUrl(JsonPath.read(lab, "$.id")) + "/scenarios/" + first + "/submit")
+                            .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"mode\":\"APPROACH\",\"approach\":\"a different answer\"}")).andReturn().getResponse();
+                    seen.add("resubmit " + again.getStatus());
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+            return defaultAnswer(p);
+        };
+
+        String labId = startLab(auth, "\"repositoryId\":\"" + repoId + "\"", 20);
+
+        assertThat(seen).containsExactly("lab GENERATING with 5 ready", "detail 200", "draft 204", "run 200 FAILED", "submit 200",
+                "feedback 200", "finish 409 SCENARIO_LAB_NOT_ACTIVE", "resubmit 409");
+        mvc.perform(get(labUrl(labId)).header("Authorization", auth))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.scenarios.length()").value(20))
+                .andExpect(jsonPath("$.scenarios[0].submitted").value(true))
+                .andExpect(jsonPath("$.scenarios[1].submitted").value(false));
+        var stored = attempts.findByLabIdOrderByCreatedAtAsc(UUID.fromString(labId));
+        assertThat(stored).hasSize(1); // only what was really submitted, and the second submit changed nothing
+        assertThat(stored.get(0).getSubmittedApproach()).isEqualTo(APPROACH);
+
+        mvc.perform(post(labUrl(labId) + "/finish").header("Authorization", auth)).andExpect(status().isAccepted());
+        mvc.perform(get(labUrl(labId) + "/assessment").header("Authorization", auth))
+                .andExpect(jsonPath("$.scenariosGenerated").value(20))
+                .andExpect(jsonPath("$.scenarios.length()").value(1));
+        mvc.perform(get("/api/scenario-labs/active").header("Authorization", auth)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void aTwentyScenarioLabThatEndsPartiallySaysExactlyHowManyExist() throws Exception {
+        setUpRepo("scale-twenty-partial@example.com");
+        AtomicInteger builds = new AtomicInteger();
+        answers = p -> ScenarioFixtures.isBuild(p) && builds.incrementAndGet() > 17 ? "not json" : defaultAnswer(p);
+
+        String labId = startLab(auth, "\"repositoryId\":\"" + repoId + "\"", 20);
+
+        mvc.perform(get(labUrl(labId)).header("Authorization", auth))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.scenarios.length()").value(17))
+                .andExpect(jsonPath("$.generationNote").value("17 of 20 scenarios generated."));
+    }
+
+    @Test
+    void aLabForRolesTheRepositoryHasNoCodeForFailsWithThatReasonBeforeAnyModelCall() throws Exception {
+        setUpRepo("scale-no-role-code@example.com");
+        String body = mvc.perform(post("/api/scenario-labs").header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"repositoryId\":\"" + repoId + "\",\"roles\":[\"FRONTEND_ENGINEER\"],\"seniority\":\"SDE1\",\"scenarioCount\":5}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        mvc.perform(get(labUrl(JsonPath.read(body, "$.id"))).header("Authorization", auth))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.errorCode").value("NO_CODE_FOR_ROLES"));
+        assertThat(prompts).noneMatch(ScenarioFixtures::isPlan); // the orders service is Python backend code only
+        mvc.perform(get("/api/scenario-labs/active").header("Authorization", auth)).andExpect(status().isNoContent());
     }
 
     @Test
