@@ -123,7 +123,7 @@ class ScenarioExecutionServiceTest {
         new ScenarioExecutionService(provider, PROPERTIES).run(ScenarioLanguage.PYTHON, WORKSPACE, "from engiens import check\n");
         ExecutionRequest first = provider.last.get();
         assertThat(first.files()).containsOnlyKeys("orders.py", "engiens.py", "engiens_run.py", "engiens_checks.py", ".engiens_nonce");
-        assertThat(first.image()).isEqualTo("python:3.12-slim");
+        assertThat(first.image()).isEqualTo(LanguageRuntime.PYTHON.image());
         assertThat(first.resultMarker()).isEqualTo("@@ENGIENS:" + first.files().get(".engiens_nonce") + ":");
 
         new ScenarioExecutionService(provider, PROPERTIES).run(ScenarioLanguage.PYTHON, WORKSPACE, "");
