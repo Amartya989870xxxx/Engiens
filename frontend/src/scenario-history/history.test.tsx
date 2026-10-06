@@ -48,7 +48,7 @@ test('the assessment page is a read-only report with the evaluation, and exports
   const user = userEvent.setup()
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
     String(input).endsWith('/pdf')
-      ? new Response(new Blob(['%PDF-1.7']), { status: 200, headers: { 'Content-Disposition': 'attachment; filename="engiens-scenario-lab-orders-api-3.pdf"' } })
+      ? new Response('%PDF-1.7', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="engiens-scenario-lab-orders-api-3.pdf"' } })
       : json(assessmentReport()),
   )
   URL.createObjectURL = vi.fn(() => 'blob:pdf')
