@@ -100,7 +100,7 @@ export function DashboardPage() {
             </Suggestion>
           )}
           <Suggestion icon={<FlaskIcon />} to="/scenario-lab">
-            Practice a production problem in the Scenario Lab
+            Practice in the Scenario Lab
           </Suggestion>
           <Suggestion icon={<UserIcon />} to="/profile">
             Update your engineering profile

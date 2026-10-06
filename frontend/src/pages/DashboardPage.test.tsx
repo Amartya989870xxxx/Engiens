@@ -104,5 +104,5 @@ test('import errors are shown in the server’s own words', async () => {
 test('the Scenario Lab is offered as a working link', async () => {
   mockServer(() => json({}))
   renderDashboard()
-  expect(await screen.findByRole('link', { name: /Practice a production problem/ })).toHaveAttribute('href', '/scenario-lab')
+  expect(await screen.findByRole('link', { name: /Practice in the Scenario Lab/ })).toHaveAttribute('href', '/scenario-lab')
 })
