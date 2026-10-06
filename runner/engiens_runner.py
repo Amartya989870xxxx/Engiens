@@ -10,7 +10,7 @@ Isolation is process-level, not container-level (this runs where containers can'
 - resource limits: processes, open files, file size and CPU seconds; memory is bounded by the language flags in the
   commands (-Xmx, --max-old-space-size) and by this service's container limit;
 - when this service runs as root (in its container), the command runs as the unprivileged user "nobody".
-There is no network isolation: see deploy/README.md.
+There is no network isolation: see deploy/RAILWAY.md.
 
 Standard library only. Configuration (environment): PORT (8090), RUNNER_TOKEN (required), RUNNER_MAX_CONCURRENT (2).
 """
