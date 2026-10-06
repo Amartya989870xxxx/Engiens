@@ -1,0 +1,106 @@
+# Engiens production stack for one Linux VM (AWS EC2): Caddy (HTTPS), the backend and PostgreSQL. The frontend is on
+# Vercel. Scenario Lab code runs in short-lived sandbox containers that the backend starts on this host's Docker Engine
+# (--network none, read-only, no mounts, strict limits); they are not services in this file.
+#
+# Run from this directory:  docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# Every secret comes from deploy/.env (never committed; see .env.production.example). deploy/README.md is the runbook.
+
+name: engiens
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No "ports": the database is reachable only from the backend, on this compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    logging: *logging
+
+  backend:
+    build: ../backend
+    image: engiens-backend:${ENGIENS_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_TTL_MINUTES: ${JWT_TTL_MINUTES:-120}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:?set CORS_ALLOWED_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL:?set FRONTEND_URL}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      # Scenario Lab code runs in the local Docker sandbox on this host. Fixed here, not taken from .env: the prod
+      # profile's default is the Railway runner, which this deployment doesn't have.
+      SCENARIO_EXECUTION_ENABLED: "true"
+      SCENARIO_EXECUTION_PROVIDER: docker
+      SCENARIO_EXECUTION_MAX_CONCURRENT: ${SCENARIO_EXECUTION_MAX_CONCURRENT:-2}
+      SCENARIO_BUILD_CONCURRENCY: ${SCENARIO_BUILD_CONCURRENCY:-3}
+      REVIEWS_PER_DAY: ${REVIEWS_PER_DAY:-10}
+      LABS_PER_DAY: ${LABS_PER_DAY:-5}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError}
+    # The backend starts sandbox containers through the host's Docker socket. Its non-root user joins the socket's
+    # group (DOCKER_GID: `stat -c %g /var/run/docker.sock` on the VM); nothing else in this stack gets the socket.
+    # Whoever controls this socket controls the host, so the backend container is otherwise locked down.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:?set DOCKER_GID}"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${BACKEND_MEMORY:-1g}
+    # Spring's graceful shutdown waits up to 20 s for in-flight requests.
+    stop_grace_period: 30s
+    # No "ports": only Caddy reaches the API. The health check comes from backend/Dockerfile (/actuator/health).
+    logging: *logging
+
+  caddy:
+    image: caddy:2@sha256:3422ce6de165df66534f9b9ba50efaf457114ec961763cc52f5dbdaac2972d73
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    # The only published ports. HTTP_PORT/HTTPS_PORT exist for local rehearsals; on the server they stay 80/443.
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      API_HOST: ${API_HOST:?set API_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
