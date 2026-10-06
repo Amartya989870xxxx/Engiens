@@ -100,3 +100,9 @@ test('import errors are shown in the server’s own words', async () => {
   // The row is usable again for another attempt.
   expect(screen.getByRole('button', { name: /Review lens/ })).toBeEnabled()
 })
+
+test('the Scenario Lab is offered as a working link', async () => {
+  mockServer(() => json({}))
+  renderDashboard()
+  expect(await screen.findByRole('link', { name: /Practice a production problem/ })).toHaveAttribute('href', '/scenario-lab')
+})

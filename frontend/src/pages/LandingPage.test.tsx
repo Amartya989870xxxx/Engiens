@@ -45,3 +45,12 @@ test('pointing at a review dimension explains what it covers', async () => {
   await userEvent.hover(screen.getByRole('button', { name: /Persistence/ }))
   expect(screen.getByText(/N\+1 queries/)).toBeInTheDocument()
 })
+
+test('the review index lists all sixteen rubric dimensions and the Scenario Lab is live, not "soon"', () => {
+  renderLanding()
+  const review = screen.getByRole('heading', { name: 'Review Index' }).closest('section')!
+  expect(review.querySelectorAll('li')).toHaveLength(16)
+  expect(screen.getByRole('heading', { name: 'Scenario Lab' })).toBeInTheDocument()
+  expect(screen.queryByText(/^soon$/i)).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Locked')).not.toBeInTheDocument()
+})

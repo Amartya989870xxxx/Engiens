@@ -99,8 +99,8 @@ export function DashboardPage() {
               Add your GitHub profile to pick from your projects
             </Suggestion>
           )}
-          <Suggestion icon={<FlaskIcon />} soon>
-            Practice a production incident
+          <Suggestion icon={<FlaskIcon />} to="/scenario-lab">
+            Practice a production problem in the Scenario Lab
           </Suggestion>
           <Suggestion icon={<UserIcon />} to="/profile">
             Update your engineering profile
@@ -132,29 +132,23 @@ type SuggestionProps = {
   meta?: string
   onClick?: () => void
   to?: string
-  soon?: boolean
   /** While one import runs, the other rows can't start a second one. */
   disabled?: boolean
 }
 
-function Suggestion({ icon, children, meta, onClick, to, soon, disabled }: SuggestionProps) {
+function Suggestion({ icon, children, meta, onClick, to, disabled }: SuggestionProps) {
   const body = (
     <>
       <span className="text-muted">{icon}</span>
       <span className="flex-1 truncate">{children}</span>
       {meta && <span className="font-mono text-xs text-muted">{meta}</span>}
-      {soon && <span className="rounded border border-line px-1.5 py-px text-[10px] uppercase tracking-wider">Soon</span>}
     </>
   )
   const base = 'flex w-full items-center gap-4 rounded-lg px-4 py-2.5 text-left text-[15px]'
   const interactive = `${base} text-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted`
   return (
     <li>
-      {soon ? (
-        <span aria-disabled className={`${base} text-muted/60`}>
-          {body}
-        </span>
-      ) : to ? (
+      {to ? (
         <Link to={to} className={interactive}>
           {body}
         </Link>

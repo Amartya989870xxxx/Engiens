@@ -3,23 +3,32 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../useAuth'
 import { BRAND } from '../brand'
 
-/** The eight review dimensions from the product's review rubric. */
+/** The sixteen dimensions of the review rubric (RubricDimension on the backend), in the same order. */
 const DIMENSIONS = [
+  { name: 'Correctness', tags: ['Edge cases'], looksAt: 'Whether the code does what it claims: business rules, edge cases, invalid states, unfinished workflows.' },
+  { name: 'Architecture', tags: ['Layers', 'Coupling'], looksAt: 'Separation of concerns, coupling and cohesion, clear boundaries, and where business logic lives.' },
+  { name: 'System Design', tags: ['Scale'], looksAt: 'What happens as traffic and data grow, where the bottlenecks are, and which assumptions stop holding.' },
+  { name: 'Backend', tags: ['Services'], looksAt: 'How backend logic is organised, transaction use, and domain decisions kept apart from transport.' },
+  { name: 'API Design', tags: ['Contracts'], looksAt: 'Request and response contracts, consistent validation and errors, HTTP semantics, and idempotency.' },
+  { name: 'Persistence', tags: ['Schema', 'Queries'], looksAt: 'Schema design, migrations, transaction boundaries, missing indexes, and N+1 queries.' },
+  { name: 'Concurrency', tags: ['Races'], looksAt: 'Simultaneous requests, duplicate operations, unsafe state transitions, and plausible race conditions.' },
+  { name: 'Performance', tags: ['Efficiency'], looksAt: 'Repeated work, repeated database or API calls, over-fetching, and obvious caching opportunities.' },
+  { name: 'Error Handling', tags: ['Resilience'], looksAt: 'Expected failures, swallowed exceptions, safe retries, timeouts, and partial failures.' },
+  { name: 'Security', tags: ['Secrets', 'Input'], looksAt: 'Authentication, authorisation, exposed secrets, unsafe input. Not a full audit. The obvious, caught early.' },
+  { name: 'Testing', tags: ['Coverage'], looksAt: 'Important workflows with no tests, untested edge cases, and where an integration test would pay off.' },
   { name: 'Code Quality', tags: ['Readability', 'Naming'], looksAt: 'Readability, naming, duplicated logic, and functions that try to do too much.' },
-  { name: 'Architecture', tags: ['Layers', 'Coupling'], looksAt: 'Separation of concerns, which way dependencies point, and where business logic lives.' },
-  { name: 'Error Handling', tags: ['Validation', 'Failures'], looksAt: 'Missing validation, swallowed exceptions, and API errors nobody can act on.' },
-  { name: 'Testing', tags: ['Coverage'], looksAt: 'Important paths with no tests, untested edge cases, and where an integration test would pay off.' },
-  { name: 'Security', tags: ['Secrets', 'Input'], looksAt: 'Exposed secrets, unsafe input, missing authorisation checks. Not a full audit. The obvious, caught early.' },
-  { name: 'Persistence', tags: ['Schema', 'Queries'], looksAt: 'Schema design, transaction boundaries, missing indexes, and N+1 queries.' },
-  { name: 'Performance', tags: ['Scale'], looksAt: 'Expensive loops, repeated external calls, missing caches, and work that won’t survive growth.' },
-  { name: 'Production Readiness', tags: ['Logging', 'Config'], looksAt: 'Logging, configuration, observability, and what breaks at 3 a.m.' },
+  { name: 'Production Readiness', tags: ['Logging', 'Config'], looksAt: 'Logging, configuration, health checks, CI/CD, and what breaks at 3 a.m.' },
+  { name: 'Dependencies', tags: ['Third parties'], looksAt: 'External services and libraries: used intentionally, abstracted, and handled when they fail.' },
+  { name: 'Documentation', tags: ['Setup'], looksAt: 'Whether another developer could set the project up, run it, and understand its main decisions.' },
+  { name: 'Frontend', tags: ['State', 'UI'], looksAt: 'State, organised API calls, loading, error and empty states, and route and auth boundaries.' },
 ]
 
+/** Examples of the kinds of scenario a lab builds; real ones are generated from the user's own repository. */
 const SCENARIOS = [
-  { name: 'The /feed slowdown', tags: ['Latency', 'Database'] },
-  { name: 'Charged twice', tags: ['Reliability'] },
-  { name: 'Ten times the traffic', tags: ['Scaling'] },
-  { name: 'Stale after deploy', tags: ['Caching'] },
+  { name: 'Charged twice', tags: ['Concurrency', 'Code'] },
+  { name: 'The slow endpoint', tags: ['Database'] },
+  { name: 'A dependency goes down', tags: ['Resilience'] },
+  { name: 'Ten times the traffic', tags: ['Scaling', 'Approach'] },
 ]
 
 const PRINCIPLES = [
@@ -39,10 +48,10 @@ export function LandingPage() {
         <main>
           <Hero signedIn={user !== null} />
           <ReviewIndex />
-          <Section id="lab" title={<>Scenario Lab <Pill tone="light">Soon</Pill></>} lede="Production incidents to reason through. We evaluate how you think, not just your final answer. What would you check first, and why?">
+          <Section id="lab" title="Scenario Lab" lede="Production problems built from your own repository. Fix the code against hidden checks, or explain your approach. We evaluate how you think, not just your final answer.">
             <IndexList>
               {SCENARIOS.map((s, i) => (
-                <Entry key={s.name} number={SCENARIOS.length - i} tags={[<LockPill key="lock" />, ...s.tags]}>
+                <Entry key={s.name} number={SCENARIOS.length - i} tags={s.tags}>
                   {s.name}
                 </Entry>
               ))}
@@ -124,7 +133,7 @@ function Hero({ signedIn }: { signedIn: boolean }) {
 function ReviewIndex() {
   // Hovering or focusing a dimension shows what that part of the review looks at.
   const [active, setActive] = useState<number | null>(null)
-  const caption = active === null ? 'Eight dimensions, one open rubric. Point at one to see what it covers.' : DIMENSIONS[active].looksAt
+  const caption = active === null ? 'Sixteen dimensions, one open rubric. Point at one to see what it covers.' : DIMENSIONS[active].looksAt
   return (
     <Section id="review" title="Review Index">
       <IndexList onLeave={() => setActive(null)}>
@@ -199,24 +208,10 @@ function Entry({ number, tags = [], size = 'lg', dimmed = false, onActivate, chi
   )
 }
 
-function Pill({ children, tone = 'dark' }: { children: ReactNode; tone?: 'dark' | 'light' }) {
+function Pill({ children }: { children: ReactNode }) {
   return (
-    <span
-      className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-medium uppercase tracking-[0.06em] ${
-        tone === 'light' ? 'bg-[#cfcfcf] text-black' : 'bg-raised text-ink/80'
-      }`}
-    >
+    <span className="inline-flex h-7 items-center rounded-full bg-raised px-2.5 text-[11px] font-medium uppercase tracking-[0.06em] text-ink/80">
       {children}
-    </span>
-  )
-}
-
-function LockPill() {
-  return (
-    <span aria-label="Locked" className="inline-flex size-7 items-center justify-center rounded-full bg-raised text-ink/80">
-      <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor" aria-hidden>
-        <path d="M7 10V7a5 5 0 0 1 10 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zm2 0h6V7a3 3 0 0 0-6 0z" />
-      </svg>
     </span>
   )
 }
@@ -226,7 +221,7 @@ function Footer() {
     <footer className="grid gap-8 border-t border-line py-10 font-display text-[15px] leading-snug text-muted sm:grid-cols-[8rem_1fr_9rem]">
       <img src="/engiens-180.png" alt="" width={40} height={40} className="rounded-[22%] opacity-90" />
       <div>
-        <p className="max-w-[16rem]">Built for students and early-career engineers. New features ship regularly.</p>
+        <p className="max-w-[16rem]">Built for students and early-career engineers.</p>
         <LocalTime />
       </div>
       <ul className="space-y-0.5">
