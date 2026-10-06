@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
  * is passed in, so the code can't see source trees, .env values, tokens or database credentials.
  */
 @Component
+@ConditionalOnProperty(prefix = "scenario.execution", name = "provider", havingValue = "docker", matchIfMissing = true)
 public class DockerSandboxExecutionProvider implements ExecutionProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxExecutionProvider.class);
@@ -34,6 +36,11 @@ public class DockerSandboxExecutionProvider implements ExecutionProvider {
 
     public DockerSandboxExecutionProvider(ExecutionProperties properties) {
         this.properties = properties;
+    }
+
+    @Override
+    public String description() {
+        return "local Docker sandbox";
     }
 
     @Override
@@ -130,6 +137,7 @@ public class DockerSandboxExecutionProvider implements ExecutionProvider {
                 "--ulimit", "nofile=256:256",
                 "--workdir", "/work",
                 "--env", "HOME=/tmp",
+                "--env", "TMPDIR=/tmp",
                 "--entrypoint", "/bin/sh",
                 request.image(),
                 "-c", "tar -xmf - -C /work && " + request.command()));

@@ -20,7 +20,7 @@ import com.engineeringlens.scenario.model.ScenarioValidation;
 @EnabledIf("sandboxReady")
 class HarnessValidatorSandboxTest {
 
-    private static final ExecutionProperties PROPERTIES = new ExecutionProperties(true, "docker", 2, Duration.ofSeconds(30), 16384);
+    private static final ExecutionProperties PROPERTIES = new ExecutionProperties(true, "docker", 2, Duration.ofSeconds(30), 16384, "docker");
     private static final DockerSandboxExecutionProvider DOCKER = new DockerSandboxExecutionProvider(PROPERTIES);
     private static final HarnessValidator VALIDATOR = new HarnessValidator(new ScenarioExecutionService(DOCKER, PROPERTIES));
 

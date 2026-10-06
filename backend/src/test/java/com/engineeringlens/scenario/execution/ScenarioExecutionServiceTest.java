@@ -20,7 +20,7 @@ import com.engineeringlens.scenario.ScenarioLanguage;
 class ScenarioExecutionServiceTest {
 
     private static final List<WorkspaceFile> WORKSPACE = List.of(new WorkspaceFile("orders.py", "def place(o):\n    return o\n"));
-    private static final ExecutionProperties PROPERTIES = new ExecutionProperties(true, "docker", 1, Duration.ofMillis(200), 16384);
+    private static final ExecutionProperties PROPERTIES = new ExecutionProperties(true, "docker", 1, Duration.ofMillis(200), 16384, "docker");
 
     private static String check(String name, boolean passed, String message) {
         return "{\"kind\":\"check\",\"name\":\"" + name + "\",\"passed\":" + passed + ",\"message\":"

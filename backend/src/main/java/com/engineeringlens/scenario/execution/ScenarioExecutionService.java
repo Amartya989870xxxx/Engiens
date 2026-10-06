@@ -188,7 +188,8 @@ public class ScenarioExecutionService {
     @EventListener(ApplicationReadyEvent.class)
     void reportSandboxState() {
         if (!provider.available()) {
-            log.warn("Code sandbox unavailable (Docker not reachable or scenario.execution.enabled=false): scenarios will be approach-only");
+            log.warn("Code execution unavailable ({}; or scenario.execution.enabled=false): scenarios will be approach-only",
+                    provider.description());
         } else if (provider instanceof DockerSandboxExecutionProvider docker) {
             List<String> missing = docker.missingImages(LanguageRuntime.images());
             if (!missing.isEmpty()) {
@@ -196,6 +197,8 @@ public class ScenarioExecutionService {
             } else {
                 log.info("Code sandbox ready: Docker reachable, {} pinned image(s) present", LanguageRuntime.images().size());
             }
+        } else {
+            log.info("Code execution ready: {}", provider.description());
         }
     }
 

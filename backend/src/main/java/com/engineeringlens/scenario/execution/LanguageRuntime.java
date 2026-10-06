@@ -31,15 +31,16 @@ public enum LanguageRuntime {
             List.of("javascript/engiens.mjs", "javascript/engiens_run.mjs"),
             "exec node --disable-warning=ExperimentalWarning --max-old-space-size=160 engiens_run.mjs engiens_checks.ts"),
 
+    // Temporary files go in $TMPDIR (/tmp in the Docker sandbox; a private directory per run on the runner service).
     // Compile everything first; on failure, print the compiler's output and a compile_error result, then stop.
     JAVA(ScenarioLanguage.JAVA, Images.JAVA, 512, Duration.ofSeconds(45), "EngiensChecks.java",
             List.of("java/Engiens.java", "java/EngiensRunner.java"),
-            "N=$(cat .engiens_nonce); find . -name '*.java' > /tmp/sources.txt; "
+            "T=${TMPDIR:-/tmp}; N=$(cat .engiens_nonce); find . -name '*.java' > $T/sources.txt; "
                     + "if ! javac -J-XX:+UseSerialGC -J-Xmx256m -J-XX:TieredStopAtLevel=1 -J-XX:-UsePerfData -encoding UTF-8 -nowarn "
-                    + "-d /tmp/classes @/tmp/sources.txt 2>/tmp/javac.txt; then head -c 16000 /tmp/javac.txt >&2; "
+                    + "-d $T/classes @$T/sources.txt 2>$T/javac.txt; then head -c 16000 $T/javac.txt >&2; "
                     + "printf '\\n@@ENGIENS:%s:{\"kind\":\"summary\",\"outcome\":\"compile_error\",\"message\":\"Compilation failed\"}\\n' \"$N\"; "
                     + "exit 0; fi; unset N; "
-                    + "exec java -XX:+UseSerialGC -Xmx256m -XX:TieredStopAtLevel=1 -XX:-UsePerfData -Xss1m -cp /tmp/classes EngiensRunner");
+                    + "exec java -XX:+UseSerialGC -Xmx256m -XX:TieredStopAtLevel=1 -XX:-UsePerfData -Xss1m -cp $T/classes EngiensRunner");
 
     /**
      * Pinned by digest (the multi-architecture index, so the same reference runs on x86 and ARM64 servers): a run never
