@@ -178,7 +178,7 @@ export async function getLatestAnalysis(repositoryId: string) {
   }
 }
 
-// ---- AI engineering review (Phase 4D) ----------------------------------------------------------
+// ---- AI engineering review ---------------------------------------------------------------------
 
 export type Assessment = 'STRONG' | 'SOLID' | 'DEVELOPING' | 'NEEDS_ATTENTION' | 'NOT_ASSESSABLE'
 export type Level3 = 'HIGH' | 'MEDIUM' | 'LOW'
@@ -578,7 +578,7 @@ export const getScenarioFeedback = (labId: string, scenarioId: string) => api<Sc
 /** Finish the open lab with the scenarios submitted so far; poll the lab until it is COMPLETED. */
 export const finishLab = (labId: string) => api<void>(`${lab(labId)}/finish`, { method: 'POST' })
 
-// ---- Progress (Phase 6) ------------------------------------------------------------------------
+// ---- Progress --------------------------------------------------------------------------------
 
 /** An evidence-based indicator for one engineering area; never a score. */
 export type ProgressIndicator =

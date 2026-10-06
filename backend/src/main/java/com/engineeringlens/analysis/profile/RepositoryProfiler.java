@@ -23,7 +23,7 @@ import com.engineeringlens.analysis.profile.RepositoryProfile.Detection;
 import com.engineeringlens.analysis.profile.RepositoryProfile.StructureSignal;
 
 /**
- * Phase 4A: describes what kind of project a repository is. Two pure steps, so both are testable
+ * Describes what kind of project a repository is. Two pure steps, so both are testable
  * without GitHub: {@link #filesToRead} picks the few manifest/config files worth fetching, and
  * {@link #profile} builds the profile from the inventory plus whatever of those files was read.
  * README prose is never used as evidence.

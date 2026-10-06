@@ -25,7 +25,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
 /**
- * Calls GitHub as the Engineering Lens GitHub App: verifies which installations
+ * Calls GitHub as the Engiens GitHub App: verifies which installations
  * a user owns and reads the repositories they chose to share (read-only).
  */
 @Component

@@ -18,7 +18,7 @@ import com.engineeringlens.analysis.review.model.RubricDimension;
 import com.engineeringlens.repository.ImportedRepo;
 
 /**
- * Phase 4D in one place: load the prepared context → assess (without the developer profile) → teach
+ * The AI review in one place: load the prepared context → assess (without the developer profile) → teach
  * (profile + finished review, no code) → stamp Engiens metadata. It does not persist anything
  * (ReviewService does). Splitting assessment from teaching guarantees the same code gets the same
  * verdicts for every developer.

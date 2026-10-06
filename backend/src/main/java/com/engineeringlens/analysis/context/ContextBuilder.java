@@ -21,7 +21,7 @@ import com.engineeringlens.analysis.profile.RepositoryProfile;
 import com.engineeringlens.analysis.source.RunFileCache;
 
 /**
- * Phase 4C: downloads only the selected files, applies size limits, keeps credentials out, and
+ * Builds the review context: downloads only the selected files, applies size limits, keeps credentials out, and
  * assembles the provider-neutral {@link AnalysisContext}.
  */
 @Component

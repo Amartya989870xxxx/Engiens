@@ -88,7 +88,7 @@ public class GitHubConnectionService {
                 .findFirst()
                 .or(() -> mine.stream().findFirst())
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "GITHUB_NOT_INSTALLED",
-                        "Engineering Lens isn't installed on your GitHub account yet. Please try connecting again."));
+                        "The Engiens GitHub App isn't installed on your GitHub account yet. Please try connecting again."));
     }
 
     @Transactional(readOnly = true)
