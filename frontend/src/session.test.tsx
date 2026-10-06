@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, test, vi } from 'vitest'
+import { api, SESSION_EXPIRED_EVENT, tokenStore } from './api'
 import { AuthProvider } from './auth'
 import { ProtectedRoute } from './components'
 import { useAuth } from './useAuth'
@@ -94,4 +95,21 @@ test('only a 401 for the saved token on return ends the session, with the expire
 
   expect(await screen.findByText('Login page: session expired')).toBeInTheDocument()
   expect(localStorage.getItem('lens.token')).toBeNull()
+})
+
+test('a late 401 for a request sent with an older token does not end a newer login', async () => {
+  tokenStore.set('old-token')
+  let answer!: (r: Response) => void
+  vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise((resolve) => (answer = resolve)))
+  const expired = vi.fn()
+  window.addEventListener(SESSION_EXPIRED_EVENT, expired)
+
+  const pending = api('/api/progress').catch((e: unknown) => e) // sent with the old token
+  tokenStore.set('new-token') // meanwhile the user logs in again
+  answer(new Response(JSON.stringify({ status: 401, code: 'UNAUTHENTICATED', message: 'Authentication required' }), { status: 401 }))
+
+  expect(await pending).toMatchObject({ status: 401 }) // the old request still fails
+  expect(tokenStore.get()).toBe('new-token')
+  expect(expired).not.toHaveBeenCalled()
+  window.removeEventListener(SESSION_EXPIRED_EVENT, expired)
 })

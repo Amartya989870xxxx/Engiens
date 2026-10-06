@@ -39,7 +39,9 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   } catch {
     throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Check your connection and try again.')
   }
-  if (res.status === 401 && token) {
+  // Only when the rejected token is still the saved one: a late 401 for a request sent before the user logged in
+  // again must not end the newer session.
+  if (res.status === 401 && token && tokenStore.get() === token) {
     tokenStore.clear()
     window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
   }
