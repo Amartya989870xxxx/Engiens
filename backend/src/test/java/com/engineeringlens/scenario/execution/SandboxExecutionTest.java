@@ -144,7 +144,7 @@ class SandboxExecutionTest {
     @Test
     void aRunThatNeverEndsIsKilledAndCleanedUp() throws Exception {
         long start = System.nanoTime();
-        ExecutionResult r = DOCKER.execute(new ExecutionRequest("python:3.12-slim", "sleep 60", Map.of("a.txt", "x"),
+        ExecutionResult r = DOCKER.execute(new ExecutionRequest(LanguageRuntime.PYTHON.image(), "sleep 60", Map.of("a.txt", "x"),
                 Duration.ofSeconds(3), 64, "@@ENGIENS:x:"));
         assertThat(r.timedOut()).isTrue();
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(20));
