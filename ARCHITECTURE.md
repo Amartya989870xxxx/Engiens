@@ -7,7 +7,7 @@ behind each choice, see [DECISIONS.md](DECISIONS.md). For setup, see [README.md]
 2. [Backend request flow and modules](#2-backend-request-flow-and-modules)
 3. [Repository review pipeline](#3-repository-review-pipeline)
 4. [Scenario Lab pipeline](#4-scenario-lab-pipeline)
-5. [Code execution on the Railway fallback (runner)](#5-code-execution-on-the-railway-fallback-runner)
+5. [Code execution (Docker sandbox)](#5-code-execution-docker-sandbox)
 6. [Authentication](#6-authentication)
 7. [Data model](#7-data-model)
 8. [Deployment](#8-deployment)
@@ -23,12 +23,11 @@ flowchart LR
     BE --> DB[("PostgreSQL<br/>Flyway V1–V11")]
     BE -- "repository metadata,<br/>file tree, file contents" --> GH["GitHub API<br/>+ raw.githubusercontent.com"]
     BE -- "structured JSON prompts" --> AI["AI providers<br/>Gemini → Groq fallback"]
-    BE -- "user code + hidden checks" --> EX{"ExecutionProvider"}
-    EX -- "provider=docker (local + EC2 production)" --> DK["Docker sandbox<br/>one container per run"]
-    EX -- "provider=runner (Railway fallback)" --> RN["Engiens runner service<br/>runner/engiens_runner.py"]
+    BE -- "user code + hidden checks<br/>(Docker socket)" --> DK["Docker sandbox<br/>one container per run"]
 ```
 
-The browser only talks to the backend. GitHub tokens, AI keys and the runner token stay server-side.
+The browser only talks to the backend. GitHub tokens and AI keys stay server-side, and user code runs only in sandbox
+containers, never in the backend process.
 
 ## 2. Backend request flow and modules
 
@@ -134,11 +133,12 @@ flowchart TB
 Lab statuses are `GENERATING → ACTIVE → FINALIZING → COMPLETED`, with `FAILED` and `CANCELLED` as the other end
 states. A user has at most one open lab, enforced by the `active_user_id UNIQUE` column.
 
-## 5. Code execution on the Railway fallback (runner)
+## 5. Code execution (Docker sandbox)
 
-`ScenarioExecutionService` builds every run the same way, whatever executes it. Only the `ExecutionProvider`
-implementation differs. Production on EC2 uses the Docker sandbox (below the diagram); this sequence is the Railway
-fallback, where Docker containers can't be started.
+The same path runs locally and in production on EC2. `ScenarioExecutionService` builds every run;
+`DockerSandboxExecutionProvider` (behind the `ExecutionProvider` interface, which tests replace with a fake) executes it
+in a throwaway container. On EC2 the backend container reaches the host's Docker Engine through the mounted socket, so
+sandbox containers are siblings of the backend, not children, and never join the compose network.
 
 ```mermaid
 sequenceDiagram
@@ -146,27 +146,24 @@ sequenceDiagram
     participant UI as Browser (workspace)
     participant BE as Backend<br/>ScenarioWorkspaceService
     participant SX as ScenarioExecutionService
-    participant RP as RemoteRunnerExecutionProvider
-    participant RN as Runner service<br/>(private network)
+    participant DP as DockerSandboxExecutionProvider
+    participant DE as Docker Engine<br/>(host socket)
+    participant SB as Sandbox container
     UI->>BE: POST …/scenarios/{id}/run  (files)
     BE->>BE: ownership · one run per user at a time
     BE->>SX: run(language, files, hidden checks)
-    SX->>SX: add language runner + checks<br/>+ one-time result marker
-    SX->>RP: execute(ExecutionRequest)
-    RP->>RN: POST /run  Authorization: Bearer RUNNER_TOKEN<br/>{command, files, timeoutMs, memoryMb, outputLimitBytes, resultMarker}
-    RN->>RN: validate paths · temp dir (work/ tmp/ home/)<br/>own process group · emptied env · rlimits · user nobody
-    RN->>RN: run python3 / node / javac+java with time limit<br/>kill the whole group on timeout and after exit
-    RN-->>RP: {exitCode, timedOut, stdout, stderr, outputTruncated, resultLines, durationMs}
-    RP-->>SX: ExecutionResult (same shape as the Docker sandbox)
+    SX->>SX: validate paths · add language runner + checks<br/>+ one-time result marker · global run slots
+    SX->>DP: execute(ExecutionRequest)
+    DP->>DE: docker run --rm -i --pull never --network none --read-only<br/>--user 65534 --cap-drop ALL --memory --cpus --pids-limit
+    DE->>SB: start from the digest-pinned image
+    DP->>SB: workspace as a tar archive on stdin (no host mounts)
+    SB->>SB: python3 / node / javac+java with time limit<br/>marked result line per check
+    SB-->>DP: stdout · stderr · exit code (container removed)
+    DP-->>SX: ExecutionResult (timeout → docker kill)
     SX-->>BE: RunResult: PASSED / FAILED / COMPILE_ERROR / RUNTIME_ERROR / LIMIT_EXCEEDED<br/>per-check results, hidden check source never shown
     BE-->>UI: run result
-    Note over RP,RN: Non-200 (401, 400, 429, 5xx) or unreachable →<br/>SCENARIO_EXECUTION_UNAVAILABLE, never blamed on the user's code
+    Note over DP,DE: Docker unreachable or an image missing →<br/>SCENARIO_EXECUTION_UNAVAILABLE, never blamed on the user's code
 ```
-
-Locally and on EC2, `DockerSandboxExecutionProvider` receives the same `ExecutionRequest` and runs it in a throwaway
-container: `--network none`, read-only image, user 65534, all capabilities dropped, memory/CPU/PID limits,
-digest-pinned images. On EC2 the backend container starts these containers through the host's Docker socket; they are
-siblings of the backend, not children, and never join the compose network.
 
 ## 6. Authentication
 
@@ -241,8 +238,7 @@ All foreign keys to `users` and `repositories` are `ON DELETE CASCADE`. A lab's 
 
 ## 8. Deployment
 
-This is the planned production topology; the step-by-step runbook is in [deploy/README.md](deploy/README.md) (Railway
-remains a fallback: [deploy/RAILWAY.md](deploy/RAILWAY.md)).
+This is the production topology; the step-by-step runbook is in [deploy/README.md](deploy/README.md).
 
 ```mermaid
 flowchart LR
@@ -261,7 +257,7 @@ flowchart LR
     end
     BE --> GH["GitHub"]
     BE --> AI["Gemini / Groq"]
-    CI["GitHub Actions CI<br/>backend · runner · frontend jobs"] -. "on push" .-> GHR["GitHub repository"]
+    CI["GitHub Actions CI<br/>backend · frontend jobs"] -. "on push" .-> GHR["GitHub repository"]
     GHR -. "deploy on push" .-> V
     GHR -. "git pull + docker compose up<br/>(deploy/README.md §15)" .-> EC2
 ```

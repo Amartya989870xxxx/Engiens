@@ -7,12 +7,11 @@ You connect a GitHub repository and get a structured engineering review against 
 you practise realistic scenarios generated from *that* repository: fix the code against hidden checks, or explain your
 approach. Your engineering progress is tracked over time from the evidence.
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md):** eight Mermaid diagrams (system, modules, review pipeline, Scenario Lab, runner,
-  auth, data model, deployment).
+- **[ARCHITECTURE.md](ARCHITECTURE.md):** eight Mermaid diagrams (system, modules, review pipeline, Scenario Lab, code
+  execution, auth, data model, deployment).
 - **[DECISIONS.md](DECISIONS.md):** the engineering decisions, the alternatives considered, the trade-offs, and known
   limitations.
-- **[deploy/README.md](deploy/README.md):** the AWS EC2 + Vercel deployment runbook ([deploy/RAILWAY.md](deploy/RAILWAY.md):
-  the Railway fallback).
+- **[deploy/README.md](deploy/README.md):** the production deployment runbook (AWS EC2 + Vercel).
 
 ---
 
@@ -215,18 +214,18 @@ learning recommendations, written in the same assess-then-teach split.
 
 ### Where code runs
 
-| | Local development and production (AWS EC2) | Railway fallback only |
-|---|---|---|
-| Provider | `docker`: `DockerSandboxExecutionProvider` | `runner`: `RemoteRunnerExecutionProvider` → `runner/engiens_runner.py` |
-| Isolation | A throwaway container per run: `--network none`, read-only image, user 65534, all capabilities dropped, memory/CPU/PID limits, digest-pinned images | A process per run: own temp directory (deleted), own process group (killed on timeout and exit), emptied environment, user `nobody`, limits on processes, open files, file size and CPU time |
-| Reached by | Docker CLI on the backend host (on EC2: the host's Docker socket, mounted only into the backend container) | HTTP on Railway's private network with a bearer token; the runner has no public domain |
+User code runs the same way in development and in production on AWS EC2: `ScenarioExecutionService` →
+`DockerSandboxExecutionProvider` → Docker Engine on the same host → one throwaway container per Run or Submit.
 
-Both providers receive the same `ExecutionRequest` and are tested with the same scenarios. Production on EC2 uses the
-Docker sandbox, exactly as in development. The runner exists only for the Railway fallback, because Railway can't start
-Docker containers; its weaker isolation (no network isolation) is documented in
-[DECISIONS.md §14](DECISIONS.md#14-code-execution-docker-sandbox-locally-and-on-ec2-runner-service-as-the-railway-fallback). With no
-execution available, the lab setup screen says so, and labs are generated approach-only rather than pretending code
-can run.
+| | |
+|---|---|
+| Isolation | `--network none`, read-only image with small in-memory `/work` and `/tmp`, user 65534 (`nobody`), all capabilities dropped, `no-new-privileges`, memory (no swap), CPU, process and open-file limits, digest-pinned images, never pulled during a run |
+| Inputs | the workspace, the Engiens language runner and the hidden checks, streamed in as a tar archive: no host folder is mounted and none of the host's environment variables are passed in |
+| Results | only output lines carrying a one-time marker count as check results, so user code can't fake a pass |
+| Reached by | the Docker CLI in the backend; on EC2, through the host's Docker socket, mounted only into the backend container ([DECISIONS.md §14](DECISIONS.md#14-code-execution-a-throwaway-docker-container-per-run)) |
+
+With no execution available (Docker not running, images missing, or `SCENARIO_EXECUTION_ENABLED=false`), the lab
+setup screen says so, and labs are generated approach-only rather than pretending code can run.
 
 ## Progress
 
@@ -254,8 +253,8 @@ deterministic, uses no AI and has no score:
 
 ## Architecture
 
-A **modular monolith**: one Spring Boot application with packages by capability. Scenario Lab code runs in Docker
-sandbox containers; a small runner service exists only for the Railway fallback deployment.
+A **modular monolith**: one Spring Boot application with packages by capability. Scenario Lab code runs outside it,
+in throwaway Docker sandbox containers.
 
 ```mermaid
 flowchart LR
@@ -264,9 +263,7 @@ flowchart LR
     BE --> DB[("PostgreSQL")]
     BE --> GH["GitHub"]
     BE --> AI["Gemini → Groq"]
-    BE --> EX{"ExecutionProvider"}
-    EX -- "local + EC2" --> DK["Docker sandbox"]
-    EX -- "Railway fallback" --> RN["Runner service"]
+    BE -- "Docker socket" --> DK["Docker sandbox<br/>one container per run"]
 ```
 
 | Package | Responsibility |
@@ -316,7 +313,7 @@ All diagrams: [ARCHITECTURE.md](ARCHITECTURE.md).
 | Secrets | Only from environment variables; `.env`, `secrets/` and `*.pem` are git-ignored; API keys redacted from logs; the GitHub App stores only an installation id and mints short-lived tokens per request |
 | Headers | API: `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Referrer-Policy: no-referrer`, HSTS on HTTPS. Frontend: CSP, HSTS, `X-Content-Type-Options`, `frame-ancestors 'none'` (`frontend/vercel.json`) |
 | CORS | Only the configured frontend origin(s) |
-| User code | Never runs in the backend process: a throwaway Docker sandbox container per run, locally and in production on EC2 (no network, read-only, user `nobody`, resource limits); the runner is used only by the Railway fallback |
+| User code | Never runs in the backend process: a throwaway Docker sandbox container per run, locally and in production on EC2 (no network, read-only, user `nobody`, resource limits) |
 | Source code | Reviews store paths, hashes and the model's findings; excerpts are re-read from GitHub at the reviewed commit when you open them |
 
 Engiens points out obvious security issues it can see in source code. It is **not** a security audit.
@@ -329,9 +326,9 @@ Engiens points out obvious security issues it can see in source code. It is **no
 | Backend | Java 21, Spring Boot 4 (Web, Security + OAuth2 resource server, Data JPA, Validation, Actuator), Flyway, OpenPDF |
 | Database | PostgreSQL 17 (H2 in PostgreSQL mode for tests) |
 | AI | Google Gemini and Groq over HTTP, behind `AiProvider` |
-| Code execution | Docker sandbox (local and production on EC2); Python standard-library runner service (Railway fallback) |
+| Code execution | Docker Engine: one sandbox container per run (locally and in production) |
 | Tooling | Maven wrapper, npm, Vitest + Testing Library, JUnit 5 + Spring Boot Test, oxlint, GitHub Actions |
-| Hosting (planned) | Vercel (frontend); AWS EC2 with Docker Compose (Caddy, backend, PostgreSQL, sandbox); Railway as fallback |
+| Hosting | Vercel (frontend); AWS EC2, Ubuntu 24.04, Docker Compose (Caddy, backend, PostgreSQL, Docker sandbox) |
 
 ## Project structure
 
@@ -341,15 +338,14 @@ Engiens points out obvious security issues it can see in source code. It is **no
 │   ├── src/main/java/com/engineeringlens/   modules (see Architecture)
 │   ├── src/main/resources/  application*.properties, db/migration (Flyway V1–V11)
 │   ├── src/test/java/       unit + integration tests (H2)
-│   ├── Dockerfile           production image (non-root, health check)
-│   └── railway.toml         Railway fallback
+│   └── Dockerfile           production image (non-root, health check, Docker CLI for the sandbox)
 ├── frontend/                React SPA
 │   ├── src/pages/           landing, auth, onboarding, dashboard, profile, repository, review
 │   ├── src/scenario-lab/    lab setup, workspace, completion
 │   ├── src/scenario-history/, src/progress/, src/review/, src/shell/, src/shared/
 │   └── vercel.json          SPA rewrites + security headers
-├── runner/                  code runner for the Railway fallback (engiens_runner.py, Dockerfile, tests/)
-├── deploy/                  EC2 compose stack, Caddyfile, runbooks, env templates, backup/restore/smoke-test scripts
+├── deploy/                  EC2 production stack: compose file, Caddyfile, env template, runbook,
+│                            sandbox-images, backup, restore and smoke-test scripts
 ├── docker-compose.yml       local PostgreSQL
 ├── Makefile                 make backend | frontend | test | sandbox-images | stop
 ├── ARCHITECTURE.md, DECISIONS.md
@@ -360,7 +356,7 @@ The Java package `com.engineeringlens` keeps the project's working title; the pr
 
 ## Run locally
 
-Requirements: JDK 21+, Node 22.6+ (24 recommended), Docker.
+Requirements: JDK 21+, Node 22+, Docker.
 
 ```bash
 cp .env.example .env              # set DB_PASSWORD and JWT_SECRET (openssl rand -base64 48); AI keys optional
@@ -387,7 +383,8 @@ Without these settings, Engiens works with public repositories only. With them, 
 repositories": the user installs the GitHub App and chooses which repositories to share (read-only).
 
 1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
-2. Set the callback URL to `http://localhost:8080/api/github/callback` (add the deployed backend's callback too). Tick
+2. Set the callback URL to `http://localhost:8080/api/github/callback` (and `https://<API_HOST>/api/github/callback` for
+   production). Tick
    "Request user authorization (OAuth) during installation", and untick Webhook → Active.
 3. Under repository permissions, set Contents → Read-only. Nothing else.
 4. Note the App ID and Client ID, then generate a client secret and a private key. Save the key as
@@ -400,8 +397,7 @@ access tokens are minted per request and never persisted.
 ## Environment variables
 
 Local values live in the root `.env` (see `.env.example`); production values are listed in
-`deploy/.env.production.example` (EC2) and `deploy/railway.env.example` (Railway fallback). Nothing secret is
-committed.
+`deploy/.env.production.example` and live only in `deploy/.env` on the EC2 server. Nothing secret is committed.
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -413,19 +409,15 @@ committed.
 | `GITHUB_TOKEN` | no | raises GitHub's API limit from 60 to 5000 requests/hour |
 | `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY_PATH` or `GITHUB_APP_PRIVATE_KEY` | no | private repositories via the GitHub App |
 | `SCENARIO_EXECUTION_ENABLED` | no (true) | `false` = approach-only labs |
-| `SCENARIO_EXECUTION_PROVIDER` | no | `docker` (local default; fixed by the EC2 compose file) or `runner` (prod profile default, for the Railway fallback) |
-| `SCENARIO_RUNNER_URL`, `SCENARIO_RUNNER_TOKEN` | with `runner` | runner address and shared bearer token |
-| `SCENARIO_EXECUTION_MAX_CONCURRENT` | no (2) | runs at once |
+| `SCENARIO_EXECUTION_MAX_CONCURRENT` | no (2) | sandbox containers running at once, across all users |
 | `REVIEWS_PER_DAY`, `LABS_PER_DAY` | no (10, 5) | per-user daily caps (0 = no cap) |
 | `VITE_API_URL` (frontend) | yes | backend base URL |
-| `PORT`, `RUNNER_TOKEN` (runner service) | runner only | listening port and the token it accepts |
-| `API_HOST`, `ACME_EMAIL`, `DOCKER_GID`, `BACKEND_MEMORY`, `ENGIENS_VERSION` | EC2 compose only | HTTPS hostname, certificate email, Docker socket group, backend memory limit, image tag |
+| `API_HOST`, `ACME_EMAIL`, `DOCKER_GID`, `BACKEND_MEMORY`, `ENGIENS_VERSION` | production compose only | HTTPS hostname, certificate email, Docker socket group, backend memory limit, image tag |
 
 ## Testing and CI
 
 ```bash
 cd backend && ./mvnw test                         # JUnit 5 + Spring Boot Test, H2 in PostgreSQL mode
-python3 -m unittest discover -s runner/tests      # runner service
 cd frontend && npm test && npm run lint && npm run build   # Vitest, oxlint, tsc + Vite build
 make test                                         # backend + frontend
 ```
@@ -436,30 +428,40 @@ make test                                         # backend + frontend
     calculator, rate limiting.
   - *Integration tests:* register → login → authenticated requests; import → prepare → review → retrieve; full lab
     lifecycle; workspace run/submit; progress; PDF export; cross-user access returns 404.
-  - *Execution:* real execution tests run against the Docker sandbox (`SandboxExecutionTest`) and the runner service
-    (`RunnerExecutionTest`). They need Docker or the language runtimes and are skipped, not faked, without them.
-- **Runner (Python):** path validation, token checks, timeouts and process-group kill, output limits, result-marker
-  separation.
+  - *Execution:* real Docker sandbox tests (`SandboxExecutionTest`, `HarnessValidatorSandboxTest`) run Python,
+    JavaScript, TypeScript and Java in real containers and try to escape them (network, database, secrets, host files,
+    privileges, memory, output, endless runs). They need Docker and the sandbox images, and are skipped, not faked,
+    without them.
+  - *Production stack:* `ProductionStackTest` checks `deploy/docker-compose.prod.yml`: only Caddy publishes ports, only
+    the locked-down backend gets the Docker socket, and code execution is always on.
 - **Frontend (Vitest):** authentication, onboarding, dashboard import, review rendering, Scenario Lab setup and
   workspace, history, Progress.
-- **CI** (`.github/workflows/ci.yml`, on every push and pull request) has three jobs:
-  - backend (JDK 21 + Node 24, pulls the sandbox images, `./mvnw test`);
-  - runner (Python unit tests);
-  - frontend (`npm ci`, tests, lint, build).
+- **CI** (`.github/workflows/ci.yml`, on every push and pull request) has two jobs:
+  - backend (JDK 21, pulls the digest-pinned sandbox images, `./mvnw test` including the real sandbox tests);
+  - frontend (`npm ci`, tests, lint, typecheck + build).
 
 ## Deployment
 
-Planned topology: the frontend on **Vercel**; one **AWS EC2** instance running Docker Compose with **Caddy**
-(automatic HTTPS), the **backend** and **PostgreSQL**, and Docker Engine for the Scenario Lab sandbox containers. Only
-Caddy publishes ports (80/443); PostgreSQL and the backend are reachable only on the compose network, and only the
-backend container gets the Docker socket. The deployed platform keeps code-first Scenario Lab with the same container
-isolation as development. `ProductionStackTest` keeps these properties in CI.
+Engiens runs in production on **AWS EC2** with the frontend on **Vercel**:
 
-Step-by-step instructions (AWS account, instance, security group, Elastic IP, Docker, variables, backups, updates,
-rollback and cost safety) are in **[deploy/README.md](deploy/README.md)**. Railway + runner remains a documented
-fallback in [deploy/RAILWAY.md](deploy/RAILWAY.md). The production Spring profile (`SPRING_PROFILES_ACTIVE=prod`)
-requires the CORS and frontend URLs, honours `PORT` and forwarded headers and enables graceful shutdown; the EC2
-compose file sets the Docker execution provider.
+```text
+Browser ──HTTPS──▶ Vercel (React build)
+   └──HTTPS──▶ Caddy on AWS EC2 (Ubuntu 24.04, Elastic IP; automatic Let's Encrypt certificate)
+                 └─▶ Spring Boot backend (prod profile, not published)
+                       ├─▶ PostgreSQL container (private: compose network only)
+                       ├─▶ Docker Engine (Unix socket) ─▶ isolated Scenario Lab containers
+                       └─▶ GitHub (incl. the GitHub App) · Gemini · Groq
+```
+
+One `docker compose` stack (`deploy/docker-compose.prod.yml`) runs Caddy, the backend and PostgreSQL. Only Caddy
+publishes ports (80/443); PostgreSQL and the backend are reachable only on the compose network; only the backend
+container gets the Docker socket. `ProductionStackTest` keeps these properties in CI.
+
+The path for a new contributor is: [Run locally](#run-locally) → [Testing and CI](#testing-and-ci) → the step-by-step
+EC2 runbook in **[deploy/README.md](deploy/README.md)** (AWS account and cost safety, instance, security group, Elastic
+IP, Docker, variables, Vercel, GitHub App, backups, updates, rollback, shutdown). The production Spring profile
+(`SPRING_PROFILES_ACTIVE=prod`) requires the CORS and frontend URLs, trusts Caddy's forwarded headers and enables
+graceful shutdown.
 
 ## Limitations and trade-offs
 
@@ -469,8 +471,6 @@ compose file sets the Docker execution provider.
 - **One production VM.** EC2 runs everything on one instance: a single point of failure, and updates, backups and
   monitoring are our job. The backend container holds the host's Docker socket (root-equivalent on that host); it is
   the only container with it and is read-only, non-root and publishes no port.
-- **Runner isolation (Railway fallback only).** The runner isolates processes, not containers: no network isolation and
-  no per-run memory cgroup. The Docker sandbox used locally and on EC2 is stricter.
 - **JWT storage.** The JWT is in `localStorage` (simpler cross-origin setup, at the cost of exposure to XSS) and can't
   be revoked before it expires.
 - **In-memory limits.** Rate limits and run guards are in memory, so they apply per backend instance.

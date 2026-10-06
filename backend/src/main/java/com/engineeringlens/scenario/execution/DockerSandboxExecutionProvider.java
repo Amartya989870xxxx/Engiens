@@ -10,7 +10,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,7 +23,6 @@ import org.springframework.stereotype.Component;
  * is passed in, so the code can't see source trees, .env values, tokens or database credentials.
  */
 @Component
-@ConditionalOnProperty(prefix = "scenario.execution", name = "provider", havingValue = "docker", matchIfMissing = true)
 public class DockerSandboxExecutionProvider implements ExecutionProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxExecutionProvider.class);

@@ -8,8 +8,8 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 ## 1. Modular monolith, not microservices
 
 - **Decision.** One Spring Boot application, split into packages by business capability (`auth`, `repository`,
-  `analysis`, `scenario`, `progress`, …). User code runs outside it, in sandbox containers (or, on the Railway
-  fallback, the separate code runner); that split is forced by isolation, not chosen for architecture's sake.
+  `analysis`, `scenario`, `progress`, …). User code runs outside it, in throwaway Docker sandbox containers;
+  that split is forced by isolation, not chosen for architecture's sake.
 - **Problem.** A single developer with a fixed deadline needs clear boundaries without the operational cost of
   distributed systems.
 - **Alternatives.** Microservices per module (independent deploys, but network calls, distributed transactions,
@@ -27,7 +27,7 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
   All of these are mature, well-tested parts of Spring.
 - **Alternatives.** Node/Express (one language with the frontend, but more of these pieces assembled by hand).
   Python/FastAPI (fast to write, weaker static typing for a large domain model).
-- **Trade-off.** Higher memory use (about 340 MiB measured with the production JVM options) and slower start-up, in
+- **Trade-off.** Higher memory use (about 335 MiB idle, measured in the production container) and slower start-up, in
   exchange for strong typing across a large domain (reviews, labs, evaluations) and well-understood security defaults.
 
 ## 3. PostgreSQL
@@ -157,29 +157,28 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 - **Trade-off.** Generation is slower (each executable scenario runs at least twice before publication). Scenarios
   appear one by one as they are proven, so the user can start before the lab is complete.
 
-## 14. Code execution: Docker sandbox locally and on EC2, runner service as the Railway fallback
+## 14. Code execution: a throwaway Docker container per run
 
-- **Decision.** An `ExecutionProvider` interface has two implementations, selected by
-  `scenario.execution.provider`:
-  - `docker`: a throwaway container per run with no network, a read-only filesystem, user 65534, all capabilities
-    dropped, memory/CPU/PID limits and digest-pinned images. Used locally and in production on one AWS EC2 instance,
-    where the backend container reaches the host's Docker Engine through its socket (`deploy/docker-compose.prod.yml`).
-  - `runner`: an HTTP call to the Engiens runner service on Railway's private network, for the Railway fallback.
-- **Problem.** The deployed product must support code-first scenarios with real isolation. Railway, the first hosting
-  choice, can't start Docker containers, which is why the runner was built.
-- **Alternatives.** A paid sandbox service (cost, external dependency). Railway + runner (works, weaker isolation:
-  kept as the fallback). Approach-only in production (rejected: it removes the core feature). A VM with Docker
-  (chosen: more operations work, but production runs the same, fully isolated sandbox as development).
-- **Trade-off on EC2.** Whoever controls the Docker socket controls the host. Only the backend container gets it, and
-  that container is read-only, non-root, `no-new-privileges`, memory-limited and publishes no port; user code never
-  sees the socket (`ProductionStackTest` keeps this in CI). One VM is also a single point of failure, and operating it
-  (updates, backups) is our job.
-- **Trade-off on the Railway fallback, stated plainly.** The runner isolates *processes*, not containers. Each run gets its own temporary
-  directory (deleted afterwards), its own process group (killed on timeout and after exit), an emptied environment,
-  the `nobody` user, and limits on processes, open files, file size and CPU time. It does **not** have network
-  isolation or a per-run memory cgroup. It holds no credentials worth stealing: the database and AI keys live only in
-  the backend. Both providers receive the same `ExecutionRequest` and pass the same integration scenarios
-  (`SandboxExecutionTest`, `RunnerExecutionTest`).
+- **Decision.** User code runs only in a throwaway Docker container per Run or Submit, created by
+  `DockerSandboxExecutionProvider`: no network, a read-only image with small in-memory `/work` and `/tmp`, user 65534,
+  all capabilities dropped, `no-new-privileges`, memory (no swap), CPU, process and open-file limits, digest-pinned
+  images that are never pulled during a run, and the files streamed in as a tar archive (no host mounts, and none of the host's
+  environment variables). The same path runs locally and in production on EC2, where the backend container reaches the host's Docker
+  Engine through its socket (`deploy/docker-compose.prod.yml`). The `ExecutionProvider` interface keeps
+  `ScenarioExecutionService` free of Docker details and lets tests replace real containers with a scripted fake.
+- **Problem.** Scenario code is untrusted. It must not reach the network, the database, secrets or the host, and an
+  endless or memory-hungry run must not affect other users.
+- **Alternatives.** Running code in the backend process (no isolation at all). A process-level runner on a host without
+  Docker: process groups, rlimits and the `nobody` user, but no network isolation and no per-run memory cgroup; one was
+  built during development and removed once production moved to a Docker host. A paid sandbox API (cost, an external
+  dependency holding user code). Approach-only labs in production (rejected: it removes the core feature).
+- **Trade-off.** Production needs a host that can run Docker (§17). Whoever controls the Docker socket controls that
+  host: only the backend container gets it, and that container is read-only, non-root, `no-new-privileges`,
+  memory-limited and publishes no port, while user code never sees the socket. Each run pays a container start
+  (measured about 0.2 s for Python and JavaScript, under 1 s for a Java compile-and-run).
+- **In code.** `DockerSandboxExecutionProvider`, `LanguageRuntime`, `ScenarioExecutionService`,
+  `deploy/sandbox-images.sh`. Tests try to escape the sandbox for real (`SandboxExecutionTest`,
+  `HarnessValidatorSandboxTest`), and `ProductionStackTest` keeps the production socket and port rules in CI.
 
 ## 15. Progress is deterministic and computed on read
 
@@ -198,14 +197,31 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 - **Trade-off.** In-memory limiters reset on restart and are per instance. That is fine for a single backend instance,
   but it would need shared storage (e.g. Redis) to scale horizontally.
 
+## 17. Production: one EC2 host with Docker Compose, frontend on Vercel
+
+- **Decision.** Vercel serves the static React build. One AWS EC2 instance (Ubuntu 24.04, Elastic IP) runs a Docker
+  Compose stack: Caddy (automatic Let's Encrypt HTTPS, the only published ports 80/443), the Spring Boot backend and
+  PostgreSQL in a container on a private compose network. Docker Engine on the same host runs the Scenario Lab sandbox
+  containers (§14). The security group opens 80/443, and SSH only from the administrator's address.
+- **Problem.** The whole product, including code-first Scenario Lab, must work in production with the same isolation as
+  development, on a student budget and operated by one person.
+- **Alternatives.** A platform without Docker (cheaper to operate, but code execution would need the weaker process
+  runner described in §14). Kubernetes or a managed container service (more moving parts, and starting sibling
+  containers is harder). A managed database (automated backups, but extra cost: listed as future work). Serving the
+  frontend from the VM too (Vercel gives a CDN and immutable deploys at no cost).
+- **Trade-off.** One VM is a single point of failure, and operating it is our job: OS updates, nightly `pg_dump`
+  backups copied off the server, disk space. Deploys are manual (`git pull`, `docker compose up --build`), with images
+  tagged by commit SHA so a rollback is one variable change.
+- **In code.** `deploy/docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/.env.production.example`,
+  `deploy/backup.sh`, `deploy/restore.sh`, `deploy/smoke-test.sh`, `deploy/README.md` (runbook), `backend/Dockerfile`,
+  `frontend/vercel.json`, `ProductionStackTest`.
+
 ---
 
 ## Known limitations
 
-- Production is one EC2 instance: a single point of failure, operated by us (updates, backups). The backend container
-  holds the host's Docker socket, which is root-equivalent on that host (§14).
-- The runner (Railway fallback only) has no network isolation and no per-run memory cgroup (§14). The Docker sandbox,
-  used locally and on EC2, does.
+- Production is one EC2 instance: a single point of failure, operated by us (updates, backups) (§17). The backend
+  container holds the host's Docker socket, which is root-equivalent on that host (§14).
 - The JWT lives in `localStorage` and can't be revoked before it expires (§5).
 - Rate limiters and the "one run per user" guard are in memory, so they apply per backend instance (§16).
 - Reviews are AI-assisted judgement against an open rubric. They are not a security audit, a coverage measurement or

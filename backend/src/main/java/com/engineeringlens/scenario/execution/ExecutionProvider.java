@@ -2,9 +2,9 @@ package com.engineeringlens.scenario.execution;
 
 /**
  * Runs a command over a set of files in an isolated, throwaway environment and reports what happened.
- * Two implementations, chosen by {@code scenario.execution.provider}: a locked-down local Docker container
- * ({@link DockerSandboxExecutionProvider}, the default) or the Engiens runner service over the network
- * ({@link RemoteRunnerExecutionProvider}, for hosts that can't start containers). Nothing above this interface changes.
+ * Everywhere the application runs (locally and in production on EC2) this is {@link DockerSandboxExecutionProvider}:
+ * a locked-down, throwaway Docker container per run. The interface is the seam that keeps {@link ScenarioExecutionService}
+ * free of Docker details and lets tests replace real containers with a scripted fake.
  */
 public interface ExecutionProvider {
 

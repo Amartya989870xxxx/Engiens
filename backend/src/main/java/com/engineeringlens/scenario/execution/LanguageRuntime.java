@@ -31,7 +31,7 @@ public enum LanguageRuntime {
             List.of("javascript/engiens.mjs", "javascript/engiens_run.mjs"),
             "exec node --disable-warning=ExperimentalWarning --max-old-space-size=160 engiens_run.mjs engiens_checks.ts"),
 
-    // Temporary files go in $TMPDIR (/tmp in the Docker sandbox; a private directory per run on the runner service).
+    // Temporary files go in $TMPDIR (/tmp, the sandbox's small in-memory scratch space).
     // Compile everything first; on failure, print the compiler's output and a compile_error result, then stop.
     JAVA(ScenarioLanguage.JAVA, Images.JAVA, 512, Duration.ofSeconds(45), "EngiensChecks.java",
             List.of("java/Engiens.java", "java/EngiensRunner.java"),

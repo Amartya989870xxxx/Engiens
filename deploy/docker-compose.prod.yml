@@ -53,10 +53,8 @@ services:
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
-      # Scenario Lab code runs in the local Docker sandbox on this host. Fixed here, not taken from .env: the prod
-      # profile's default is the Railway runner, which this deployment doesn't have.
+      # Scenario Lab code runs in Docker sandbox containers on this host. Always on here, not taken from .env.
       SCENARIO_EXECUTION_ENABLED: "true"
-      SCENARIO_EXECUTION_PROVIDER: docker
       SCENARIO_EXECUTION_MAX_CONCURRENT: ${SCENARIO_EXECUTION_MAX_CONCURRENT:-2}
       SCENARIO_BUILD_CONCURRENCY: ${SCENARIO_BUILD_CONCURRENCY:-3}
       REVIEWS_PER_DAY: ${REVIEWS_PER_DAY:-10}

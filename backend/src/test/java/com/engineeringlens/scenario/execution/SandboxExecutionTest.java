@@ -20,7 +20,7 @@ import com.engineeringlens.scenario.ScenarioLanguage;
 @EnabledIf("sandboxReady")
 class SandboxExecutionTest {
 
-    private static final ExecutionProperties PROPERTIES = new ExecutionProperties(true, "docker", 4, Duration.ofSeconds(30), 16384, "docker");
+    private static final ExecutionProperties PROPERTIES = new ExecutionProperties(true, "docker", 4, Duration.ofSeconds(30), 16384);
     private static final DockerSandboxExecutionProvider DOCKER = new DockerSandboxExecutionProvider(PROPERTIES);
     private static final ScenarioExecutionService SANDBOX = new ScenarioExecutionService(DOCKER, PROPERTIES);
 

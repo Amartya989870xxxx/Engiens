@@ -2,7 +2,7 @@
 
 One Linux virtual machine on AWS EC2 runs the whole backend side: Caddy (HTTPS), the Spring Boot API, PostgreSQL and
 Docker Engine, which runs Scenario Lab code in the same throwaway sandbox containers as local development. The React
-frontend is on Vercel. Railway is kept as a fallback in [RAILWAY.md](RAILWAY.md) until this deployment is proven.
+frontend is on Vercel. This is Engiens' production deployment.
 
 ```
 Browser ──HTTPS──▶ Vercel                     React build, SPA routing, security headers (frontend/vercel.json)
@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ Vercel                     React build, SPA routing
 | `deploy/sandbox-images.sh` | Pulls the digest-pinned Python, Node and Java sandbox images (the sandbox never pulls during a Run) |
 | `deploy/backup.sh`, `deploy/restore.sh` | Database dump with 7-day retention; restore with confirmation |
 | `deploy/smoke-test.sh` | Checks the public API from your machine after each deploy |
-| `backend/src/test/.../ProductionStackTest.java` | CI test: no published database/backend port, Docker provider, socket only in the backend |
+| `backend/src/test/.../ProductionStackTest.java` | CI test: no published database/backend port, code execution always on, socket only in the backend |
 
 ---
 
@@ -94,7 +94,7 @@ x86 (`t3`, `c7i-flex`) and ARM/Graviton (`t4g`) both work: every image is pinned
 
 ## 3. Before deployment day
 
-- [ ] Code pushed to the new GitHub repository; CI green (backend, runner, frontend)
+- [ ] Code pushed to the new GitHub repository; CI green (backend, frontend)
 - [ ] A password manager entry for: `DB_PASSWORD`, `JWT_SECRET` (generated on the server in §8, or locally), the
       AI keys (`GEMINI_API_KEY`, `GROQ_API_KEY`), `GITHUB_TOKEN`, and the GitHub App values if used
 - [ ] A Vercel account linked to the new GitHub account
@@ -220,8 +220,9 @@ nano .env
 | `SCENARIO_EXECUTION_MAX_CONCURRENT`, `BACKEND_MEMORY` | per §2 |
 | `ENGIENS_VERSION` | `git rev-parse --short HEAD` (tags the image so you can roll back) |
 
-The compose file **fixes** `SCENARIO_EXECUTION_PROVIDER=docker`: Scenario Lab runs in the Docker sandbox here, never
-on the Railway runner. Secrets live only in `deploy/.env` on the server (owner-only, git-ignored).
+Scenario Lab code always runs in Docker sandbox containers on this host: the compose file fixes
+`SCENARIO_EXECUTION_ENABLED=true`, and the Docker sandbox is the backend's only execution provider. Secrets live only in
+`deploy/.env` on the server (owner-only, git-ignored).
 
 ## 9. Start
 

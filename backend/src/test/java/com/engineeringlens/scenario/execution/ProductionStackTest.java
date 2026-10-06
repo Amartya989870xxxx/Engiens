@@ -34,13 +34,13 @@ class ProductionStackTest {
     }
 
     @Test
-    void scenarioLabRunsInTheLocalDockerSandboxWithTheProductionProfile() throws Exception {
+    void scenarioLabRunsInTheDockerSandboxWithTheProductionProfile() throws Exception {
         Map<String, Object> env = environment(services().get("backend"));
         assertThat(env.get("SPRING_PROFILES_ACTIVE")).isEqualTo("prod");
-        // Fixed values, not ${...}: the prod profile's own default is the Railway runner, which this stack doesn't have.
-        assertThat(env.get("SCENARIO_EXECUTION_PROVIDER")).isEqualTo("docker");
+        // A fixed value, not ${...}: code execution can't be switched off by a missing or mistyped .env entry.
         assertThat(env.get("SCENARIO_EXECUTION_ENABLED")).isEqualTo("true");
-        assertThat(env).doesNotContainKeys("SCENARIO_RUNNER_URL", "SCENARIO_RUNNER_TOKEN", "DOCKER_HOST");
+        // The backend reaches Docker through the mounted Unix socket only, never over TCP.
+        assertThat(env).doesNotContainKey("DOCKER_HOST");
     }
 
     @Test
@@ -74,10 +74,13 @@ class ProductionStackTest {
     }
 
     @Test
-    void backupsUseTheSamePostgresImageAsProduction() throws Exception {
-        String image = String.valueOf(services().get("postgres").get("image"));
-        assertThat(image).matches("postgres:17@sha256:[0-9a-f]{64}");
-        assertThat(Files.readString(DEPLOY.resolve("backup.sh"))).contains(image);
+    void backupAndRestoreRunInsideTheProductionDatabaseContainer() throws Exception {
+        assertThat(String.valueOf(services().get("postgres").get("image"))).matches("postgres:17@sha256:[0-9a-f]{64}");
+        // pg_dump/pg_restore run in the stack's own postgres container: same version, and the password never leaves it.
+        for (String script : List.of("backup.sh", "restore.sh")) {
+            assertThat(Files.readString(DEPLOY.resolve(script))).as(script)
+                    .contains("docker compose -f docker-compose.prod.yml").contains("exec -T postgres");
+        }
     }
 
     @Test

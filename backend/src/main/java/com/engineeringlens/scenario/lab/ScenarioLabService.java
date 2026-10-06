@@ -136,8 +136,8 @@ public class ScenarioLabService {
      *
      * @param preferredModelAvailable false when the preferred AI model is busy or out of quota: larger labs then run on
      *                                fallback models and take longer
-     * @param codeExecutionAvailable  false when this server has no code sandbox (Docker), e.g. a hosting platform that
-     *                                can't start containers: scenarios are then answered in writing (approach-only)
+     * @param codeExecutionAvailable  false when the code sandbox can't run right now (Docker unreachable, sandbox images
+     *                                missing, or execution disabled): scenarios are then answered in writing (approach-only)
      */
     public record Capacity(boolean preferredModelAvailable, boolean codeExecutionAvailable) {
     }
