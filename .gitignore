@@ -6,6 +6,7 @@ dist/
 .vscode/
 .DS_Store
 *.log
+__pycache__/
 
 # GitHub App private key and other local secrets
 *.pem
