@@ -7,7 +7,7 @@ behind each choice, see [DECISIONS.md](DECISIONS.md). For setup, see [README.md]
 2. [Backend request flow and modules](#2-backend-request-flow-and-modules)
 3. [Repository review pipeline](#3-repository-review-pipeline)
 4. [Scenario Lab pipeline](#4-scenario-lab-pipeline)
-5. [Code execution in production (runner)](#5-code-execution-in-production-runner)
+5. [Code execution on the Railway fallback (runner)](#5-code-execution-on-the-railway-fallback-runner)
 6. [Authentication](#6-authentication)
 7. [Data model](#7-data-model)
 8. [Deployment](#8-deployment)
@@ -24,8 +24,8 @@ flowchart LR
     BE -- "repository metadata,<br/>file tree, file contents" --> GH["GitHub API<br/>+ raw.githubusercontent.com"]
     BE -- "structured JSON prompts" --> AI["AI providers<br/>Gemini → Groq fallback"]
     BE -- "user code + hidden checks" --> EX{"ExecutionProvider"}
-    EX -- "provider=docker (local)" --> DK["Docker sandbox<br/>one container per run"]
-    EX -- "provider=runner (production)" --> RN["Engiens runner service<br/>runner/engiens_runner.py"]
+    EX -- "provider=docker (local + EC2 production)" --> DK["Docker sandbox<br/>one container per run"]
+    EX -- "provider=runner (Railway fallback)" --> RN["Engiens runner service<br/>runner/engiens_runner.py"]
 ```
 
 The browser only talks to the backend. GitHub tokens, AI keys and the runner token stay server-side.
@@ -134,10 +134,11 @@ flowchart TB
 Lab statuses are `GENERATING → ACTIVE → FINALIZING → COMPLETED`, with `FAILED` and `CANCELLED` as the other end
 states. A user has at most one open lab, enforced by the `active_user_id UNIQUE` column.
 
-## 5. Code execution in production (runner)
+## 5. Code execution on the Railway fallback (runner)
 
 `ScenarioExecutionService` builds every run the same way, whatever executes it. Only the `ExecutionProvider`
-implementation differs.
+implementation differs. Production on EC2 uses the Docker sandbox (below the diagram); this sequence is the Railway
+fallback, where Docker containers can't be started.
 
 ```mermaid
 sequenceDiagram
@@ -162,8 +163,10 @@ sequenceDiagram
     Note over RP,RN: Non-200 (401, 400, 429, 5xx) or unreachable →<br/>SCENARIO_EXECUTION_UNAVAILABLE, never blamed on the user's code
 ```
 
-Locally, `DockerSandboxExecutionProvider` receives the same `ExecutionRequest` and runs it in a throwaway container:
-`--network none`, read-only image, user 65534, all capabilities dropped, memory/CPU/PID limits, digest-pinned images.
+Locally and on EC2, `DockerSandboxExecutionProvider` receives the same `ExecutionRequest` and runs it in a throwaway
+container: `--network none`, read-only image, user 65534, all capabilities dropped, memory/CPU/PID limits,
+digest-pinned images. On EC2 the backend container starts these containers through the host's Docker socket; they are
+siblings of the backend, not children, and never join the compose network.
 
 ## 6. Authentication
 
@@ -238,22 +241,27 @@ All foreign keys to `users` and `repositories` are `ON DELETE CASCADE`. A lab's 
 
 ## 8. Deployment
 
-This is the planned production topology; the step-by-step runbook is in [deploy/README.md](deploy/README.md).
+This is the planned production topology; the step-by-step runbook is in [deploy/README.md](deploy/README.md) (Railway
+remains a fallback: [deploy/RAILWAY.md](deploy/RAILWAY.md)).
 
 ```mermaid
 flowchart LR
     B["Browser"] -- HTTPS --> V["Vercel<br/>static React build<br/>SPA rewrites · CSP · HSTS<br/>(frontend/vercel.json)"]
-    B -- "HTTPS API calls<br/>VITE_API_URL" --> BE
-    subgraph R["Railway project"]
-        BE["backend service<br/>backend/Dockerfile · prod profile<br/>/actuator/health"]
-        PG[("Railway PostgreSQL")]
-        RN["runner service<br/>runner/Dockerfile<br/>no public domain"]
-        BE -- "private network" --> PG
-        BE -- "private network<br/>Bearer RUNNER_TOKEN" --> RN
+    B -- "HTTPS API calls<br/>VITE_API_URL" --> CD
+    subgraph EC2["AWS EC2 instance · Elastic IP · security group 80/443 (+22 from admin IP)"]
+        CD["caddy<br/>Let's Encrypt · HTTP → HTTPS"]
+        BE["backend<br/>backend/Dockerfile · prod profile<br/>/actuator/health"]
+        PG[("postgres<br/>Docker volume, no published port")]
+        DE["Docker Engine<br/>Unix socket only"]
+        SB["sandbox containers<br/>--network none · read-only · nobody"]
+        CD -- "compose network" --> BE
+        BE -- "compose network" --> PG
+        BE -- "/var/run/docker.sock" --> DE
+        DE --> SB
     end
     BE --> GH["GitHub"]
     BE --> AI["Gemini / Groq"]
     CI["GitHub Actions CI<br/>backend · runner · frontend jobs"] -. "on push" .-> GHR["GitHub repository"]
     GHR -. "deploy on push" .-> V
-    GHR -. "deploy on push<br/>(watch paths)" .-> R
+    GHR -. "git pull + docker compose up<br/>(deploy/README.md §15)" .-> EC2
 ```

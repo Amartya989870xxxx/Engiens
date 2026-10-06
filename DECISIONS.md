@@ -8,8 +8,8 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 ## 1. Modular monolith, not microservices
 
 - **Decision.** One Spring Boot application, split into packages by business capability (`auth`, `repository`,
-  `analysis`, `scenario`, `progress`, …). The only separate process is the code runner, and that split is forced by
-  isolation, not chosen for architecture's sake.
+  `analysis`, `scenario`, `progress`, …). User code runs outside it, in sandbox containers (or, on the Railway
+  fallback, the separate code runner); that split is forced by isolation, not chosen for architecture's sake.
 - **Problem.** A single developer with a fixed deadline needs clear boundaries without the operational cost of
   distributed systems.
 - **Alternatives.** Microservices per module (independent deploys, but network calls, distributed transactions,
@@ -57,7 +57,7 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 
 - **Decision.** Passwords are hashed with BCrypt. Login issues an HS256 JWT (subject = user id, 120-minute lifetime),
   verified by Spring Security's OAuth2 resource-server support. The frontend keeps it in `localStorage`.
-- **Problem.** The SPA (on Vercel) and the API (on Railway) are on different origins, so cookies would need cross-site
+- **Problem.** The SPA (on Vercel) and the API (on its own host) are on different origins, so cookies would need cross-site
   configuration and CSRF protection.
 - **Alternatives.** Server sessions with cookies (revocable, but stateful and cross-site). An HttpOnly cookie with a
   JWT (better XSS posture, but needs CSRF handling and a same-site domain).
@@ -157,18 +157,24 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 - **Trade-off.** Generation is slower (each executable scenario runs at least twice before publication). Scenarios
   appear one by one as they are proven, so the user can start before the lab is complete.
 
-## 14. Code execution: Docker sandbox locally, runner service in production
+## 14. Code execution: Docker sandbox locally and on EC2, runner service as the Railway fallback
 
 - **Decision.** An `ExecutionProvider` interface has two implementations, selected by
   `scenario.execution.provider`:
-  - `docker`, the local default: a throwaway container per run with no network, a read-only filesystem, user 65534,
-    all capabilities dropped, memory/CPU/PID limits and digest-pinned images.
-  - `runner`, the production default: an HTTP call to the Engiens runner service on Railway's private network.
-- **Problem.** Railway can't start Docker containers, but the deployed product must support code-first scenarios. It
-  must not fall back to approach-only.
-- **Alternatives.** A paid sandbox service (cost, external dependency). A VM with Docker (more ops work; the original
-  plan before hosting moved to Railway). Approach-only in production (rejected: it removes the core feature).
-- **Trade-off, stated plainly.** The runner isolates *processes*, not containers. Each run gets its own temporary
+  - `docker`: a throwaway container per run with no network, a read-only filesystem, user 65534, all capabilities
+    dropped, memory/CPU/PID limits and digest-pinned images. Used locally and in production on one AWS EC2 instance,
+    where the backend container reaches the host's Docker Engine through its socket (`deploy/docker-compose.prod.yml`).
+  - `runner`: an HTTP call to the Engiens runner service on Railway's private network, for the Railway fallback.
+- **Problem.** The deployed product must support code-first scenarios with real isolation. Railway, the first hosting
+  choice, can't start Docker containers, which is why the runner was built.
+- **Alternatives.** A paid sandbox service (cost, external dependency). Railway + runner (works, weaker isolation:
+  kept as the fallback). Approach-only in production (rejected: it removes the core feature). A VM with Docker
+  (chosen: more operations work, but production runs the same, fully isolated sandbox as development).
+- **Trade-off on EC2.** Whoever controls the Docker socket controls the host. Only the backend container gets it, and
+  that container is read-only, non-root, `no-new-privileges`, memory-limited and publishes no port; user code never
+  sees the socket (`ProductionStackTest` keeps this in CI). One VM is also a single point of failure, and operating it
+  (updates, backups) is our job.
+- **Trade-off on the Railway fallback, stated plainly.** The runner isolates *processes*, not containers. Each run gets its own temporary
   directory (deleted afterwards), its own process group (killed on timeout and after exit), an emptied environment,
   the `nobody` user, and limits on processes, open files, file size and CPU time. It does **not** have network
   isolation or a per-run memory cgroup. It holds no credentials worth stealing: the database and AI keys live only in
@@ -196,7 +202,10 @@ trade-off accepted, and where it lives in the code. Diagrams are in [ARCHITECTUR
 
 ## Known limitations
 
-- The runner has no network isolation and no per-run memory cgroup (§14). The local Docker sandbox does.
+- Production is one EC2 instance: a single point of failure, operated by us (updates, backups). The backend container
+  holds the host's Docker socket, which is root-equivalent on that host (§14).
+- The runner (Railway fallback only) has no network isolation and no per-run memory cgroup (§14). The Docker sandbox,
+  used locally and on EC2, does.
 - The JWT lives in `localStorage` and can't be revoked before it expires (§5).
 - Rate limiters and the "one run per user" guard are in memory, so they apply per backend instance (§16).
 - Reviews are AI-assisted judgement against an open rubric. They are not a security audit, a coverage measurement or
