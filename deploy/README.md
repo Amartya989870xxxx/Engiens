@@ -1,183 +1,197 @@
 # Deploying Engiens (Vercel + Railway)
 
 ```
-Browser ──HTTPS──▶ Vercel (Hobby)              frontend: static React build, SPA routing, security headers
+Browser ──HTTPS──▶ Vercel (Hobby)          frontend: static React build, SPA routing, security headers
    │
    └──HTTPS──▶ Railway project
-                 ├─ backend   (Spring Boot, Docker image from backend/Dockerfile, prod profile, *.up.railway.app)
-                 │     └─▶ GitHub, Gemini, Groq (keys server-side only)
-                 └─ Postgres  (Railway managed PostgreSQL, private network only)
+                 ├─ backend   Spring Boot (backend/Dockerfile, prod profile), public *.up.railway.app domain
+                 │    ├─▶ Postgres  Railway managed PostgreSQL ─────────── private network only
+                 │    ├─▶ runner    Engiens scenario runner (runner/) ──── private network only, no public domain
+                 │    │               python3 3.12 · node 24 · javac/java 21; one temp dir and process group per run
+                 │    └─▶ GitHub, Gemini, Groq (keys server-side only)
 ```
+
+**The whole platform works in production, including code-first Scenario Lab:** Run executes the user's code against
+the hidden checks on the runner service, exactly as the local Docker sandbox does.
 
 | File | Purpose |
 |---|---|
-| `backend/Dockerfile` | The backend image: Java 21 JRE, non-root, prod profile, listens on `$PORT` |
-| `backend/railway.toml` | Railway config-as-code: Dockerfile build, health check, restart policy, watch paths |
-| `deploy/railway.env.example` | Every backend variable, ready to paste into Railway's Raw Editor (placeholders only) |
+| `backend/Dockerfile`, `backend/railway.toml` | Backend image and Railway config (Dockerfile build, health check, restart policy, watch paths) |
+| `runner/engiens_runner.py`, `runner/Dockerfile`, `runner/railway.toml` | The runner service: Python standard library only, plus the three language runtimes |
+| `deploy/railway.env.example` | Every variable for the backend and runner services (placeholders only) |
 | `frontend/vercel.json` | SPA fallback for deep links, asset caching, CSP/HSTS and other security headers |
 | `deploy/backup.sh` | `pg_dump` of the production database to your machine |
-| `deploy/sandbox-images.sh` | Pulls the digest-pinned code-sandbox images (local development and CI) |
+| `deploy/sandbox-images.sh` | Digest-pinned images for the local Docker sandbox (development and CI) |
 
-### Scenario Lab on Railway
+## How code execution works
 
-Scenario Lab runs submitted code in throwaway Docker containers that the backend starts. Railway services can't start
-containers, so on Railway the backend runs with `SCENARIO_EXECUTION_ENABLED=false`:
+The backend builds every run the same way, whatever executes it: the user's workspace, the Engiens language runner
+(`engiens_run.py` / `engiens_run.mjs` / `EngiensRunner.java`), the hidden checks and a one-time result marker. Where it
+runs is configuration (`scenario.execution.provider`):
 
-- labs are generated as **approach-only** scenarios: the developer explains how they'd diagnose and fix the problem,
-  and the answer is evaluated as usual (assessment, feedback, history, PDF, Progress all work);
-- the lab setup screen says so ("Code can't be run on this server…"), and Run is never offered;
-- nothing is faked: wherever the backend runs next to a Docker daemon (local development: `make sandbox-images`,
-  `make backend`), executable scenarios with Run and hidden checks work exactly as before.
+| | Local development (default) | Production (prod profile default) |
+|---|---|---|
+| Provider | `docker`: `DockerSandboxExecutionProvider` | `runner`: `RemoteRunnerExecutionProvider` |
+| Where | A throwaway Docker container per run | The runner service, over Railway's private network (`Authorization: Bearer RUNNER_TOKEN`) |
+| Isolation | Container: no network, read-only, non-root, memory/CPU/PID limits | Process: own directory (deleted after), own process group (killed on timeout or exit), emptied environment, runs as `nobody`, limits on processes, open files, file size and CPU time |
+
+**Honest limitation:** the runner isolates processes, not containers. Code it runs can reach the network, and memory per
+run is bounded by the language flags (`-Xmx256m`, `--max-old-space-size=160`) and the runner's service limit rather
+than a per-run cgroup. It can't read the runner's token, environment or files, and it has no credentials for the
+database or anything else. This is a deliberate trade-off for a free, Railway-compatible academic deployment; the local
+Docker sandbox keeps the stricter container isolation.
 
 ---
 
-## 0. Timing: don't waste the Railway trial
+## 0. Timing and accounts: don't waste the Railway trial
 
-Railway's Free Trial is a one-time **$5 credit that expires 30 days after sign-up**. Create the Railway account only
-when you're ready to deploy (planned: Oct 20–25), so the 30 days cover the evaluation period into mid-November.
-Prepare everything before that:
+The deployment uses the **new Engiens GitHub account** and its repository, and a **new Railway account** signed in with
+that GitHub account. Railway's Free Trial is a one-time **$5 credit that expires 30 days after sign-up**, so create the
+Railway account only on deployment day (planned Oct 20–25): the 30 days then cover the evaluation into mid-November.
 
-- [ ] generate `JWT_SECRET` (`openssl rand -base64 48`) and keep it in a password manager
+Before that day:
+
+- [ ] push the code to the new GitHub repository (CI green: backend, runner, frontend)
+- [ ] generate and store in a password manager: `JWT_SECRET` (`openssl rand -base64 48`), `RUNNER_TOKEN` (`openssl rand -hex 32`)
 - [ ] have `GEMINI_API_KEY`, `GROQ_API_KEY`, `GITHUB_TOKEN` (and GitHub App values if used) ready
-- [ ] `main` is green in CI and contains everything you want to demo
-- [ ] a Vercel account (free, no expiry) linked to GitHub
+- [ ] a Vercel account (free, no expiry) linked to the new GitHub account
 
-**Cost estimate** (measured locally; verify against Railway's pricing page on the day): the backend uses about
-340 MiB with the JVM settings in `railway.env.example` (about 430 MiB without them), PostgreSQL about 50 MiB, both
-nearly idle on CPU. At Railway's usage-based rates that is a few dollars a month, so **$5 covers roughly a month of
-light use, but not much more.** Watch Project → Usage weekly. If the credit runs low before the evaluation ends, the
-options are: enable Serverless (app sleeping) on the backend (the first request after idle then waits for the JVM to
-start, ~15–30 s), or move to the Hobby plan.
+**Cost estimate** (measured locally; check Railway's pricing on the day): backend ≈ 340 MiB with the JVM options in
+`railway.env.example`, runner ≈ 12 MiB idle (a Java run briefly uses a few hundred MB), PostgreSQL ≈ 50 MiB, all
+nearly idle on CPU. That is a few dollars a month in total, so **$5 is about one month of light use**. Check
+Project → Usage weekly; if the credit runs low, enable Serverless (app sleeping) on the runner first (it wakes on the
+first Run, adding a short delay), then on the backend (a ~15–30 s start after idle), or move to the Hobby plan.
 
-## 1. Create the Railway project from GitHub
+## 1. Create the Railway project and the backend service
 
-1. railway.com → sign in with GitHub → **New Project → Deploy from GitHub repo** → authorize Railway's GitHub app for
-   the `Engiens` repository → select it. This creates a service; rename it to `backend`.
-2. Service **Settings**:
+1. railway.com → sign in with the **new** GitHub account → **New Project → Deploy from GitHub repo** → authorize
+   Railway for the new `Engiens` repository → select it. Rename the created service to `backend`.
+2. `backend` → **Settings**:
    - **Source → Root Directory**: `/backend`
    - **Config-as-code → Railway Config File**: `/backend/railway.toml`
-     (Dockerfile build, `/actuator/health` health check, restart on failure, rebuild only when `backend/**` changes)
-   - **Deploy → Branch**: `main` (each push to `main` that touches `backend/` redeploys)
-3. Don't let the first build start without variables (step 3); if it does, it fails fast and redeploys once they're set.
+   - **Deploy → Branch**: `main`
 
-## 2. Add the managed PostgreSQL
+## 2. Add the runner service
 
-Project canvas → **+ New → Database → Add PostgreSQL**. Keep the service name `Postgres` (the reference variables in
-`railway.env.example` use it). Nothing else to configure: the backend reaches it over Railway's private network, and
-Flyway creates the schema on the backend's first start.
+Project canvas → **+ New → GitHub Repo** → the same repository → rename the service to **`runner`** (the backend's
+variables refer to it by this name).
 
-## 3. Backend variables
+- **Settings → Source → Root Directory**: `/runner`; **Config-as-code**: `/runner/railway.toml`
+- **Settings → Networking**: **do not** generate a public domain. Its private domain is shown there
+  (`runner.railway.internal`); the backend uses it through `${{runner.RAILWAY_PRIVATE_DOMAIN}}`.
+- **Variables** (Raw Editor): `RUNNER_TOKEN=<from your password manager>`, `PORT=8090`, `RUNNER_MAX_CONCURRENT=2`.
+  Nothing else: the runner has no database, AI or GitHub access.
 
-`backend` service → **Variables → Raw Editor** → paste `deploy/railway.env.example` → fill the empty values in the
-Railway UI (never in a file in the repository) → **Update Variables**.
+Its deploy log shows `Engiens runner listening on port 8090; runtimes: {python…, node v24…, java 21…}; running code as nobody`.
 
-| Variable | Required | What it is |
-|---|---|---|
-| `SPRING_PROFILES_ACTIVE` | yes | `prod` (also the image default) |
-| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | yes | References to the `Postgres` service (`${{Postgres.PGHOST}}` …): private network, no secrets typed by hand |
-| `CORS_ALLOWED_ORIGIN` | yes | Exact frontend origin(s), e.g. `https://engiens.vercel.app` (step 6). The backend won't start without it |
-| `FRONTEND_URL` | yes | Same URL; GitHub App redirects return there |
-| `JWT_SECRET` | yes | ≥ 32 bytes; signs login tokens. Changing it logs everyone out |
-| `JWT_TTL_MINUTES` | no | Login lifetime (default 120) |
-| `GEMINI_API_KEY`, `GROQ_API_KEY` | for AI | Free-tier keys. Without them, reviews and labs can't be generated; everything else works |
-| `GITHUB_TOKEN` | recommended | No scopes needed; raises GitHub's public API limit from 60 to 5000 requests/hour |
-| `GITHUB_APP_*` | optional | Private repositories (step 7). Private key on one line |
-| `SCENARIO_EXECUTION_ENABLED` | yes | `false` on Railway (no Docker); see above |
-| `REVIEWS_PER_DAY`, `LABS_PER_DAY` | no | Per-user daily caps on AI-backed actions (10 / 5) |
-| `JAVA_TOOL_OPTIONS` | recommended | Leaner JVM (serial GC, ~300 MB heap ceiling): ~340 MiB instead of ~430 MiB |
-| `PORT` | — | Set by Railway; the backend listens on it automatically |
+## 3. Add the managed PostgreSQL
 
-`CORS_ALLOWED_ORIGIN` and `FRONTEND_URL` need the Vercel URL. For the very first deploy, set both to
-`https://placeholder.invalid`, then replace them in step 6.
+Project canvas → **+ New → Database → Add PostgreSQL**; keep the name `Postgres`. Flyway creates the schema on the
+backend's first start.
 
-## 4. Public domain for the API
+## 4. Backend variables
 
-`backend` → **Settings → Networking → Public Networking → Generate Domain**. Railway gives an HTTPS hostname such as
-`engiens-backend-production.up.railway.app` (TLS is automatic). If asked for a port, use the one the deploy logs show
-in `Tomcat started on port …` (Railway's `PORT`).
+`backend` → **Variables → Raw Editor** → paste the backend part of `deploy/railway.env.example` → fill the empty values
+in Railway's UI (never in a committed file) → **Update Variables**.
 
-Check the deployment: **Deployments → View logs** should show `Successfully applied 11 migrations` on the first start,
-`Code sandbox unavailable … approach-only` (expected on Railway), and `Started BackendApplication`. Then:
+| Variable | What it is |
+|---|---|
+| `SPRING_PROFILES_ACTIVE` | `prod` |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | References to `Postgres` (`${{Postgres.PGHOST}}` …), over the private network |
+| `CORS_ALLOWED_ORIGIN`, `FRONTEND_URL` | The Vercel URL (step 7). Use `https://placeholder.invalid` until it exists |
+| `JWT_SECRET` | ≥ 32 bytes; signs logins. Changing it logs everyone out. `JWT_TTL_MINUTES` optional (120) |
+| `GEMINI_API_KEY`, `GROQ_API_KEY` | Free-tier AI keys. Without them reviews and labs can't be generated |
+| `GITHUB_TOKEN` | Recommended (no scopes): public API limit 60 → 5000 requests/hour |
+| `GITHUB_APP_*` | Optional: private repositories (step 8) |
+| `SCENARIO_EXECUTION_ENABLED` | `true` |
+| `SCENARIO_EXECUTION_PROVIDER` | `runner` (also the prod profile's default) |
+| `SCENARIO_RUNNER_URL` | `http://${{runner.RAILWAY_PRIVATE_DOMAIN}}:8090` |
+| `SCENARIO_RUNNER_TOKEN` | `${{runner.RUNNER_TOKEN}}`: the same secret, referenced, never typed twice |
+| `REVIEWS_PER_DAY`, `LABS_PER_DAY` | Per-user daily caps on AI-backed actions (10 / 5) |
+| `JAVA_TOOL_OPTIONS` | Leaner JVM: ~340 MiB instead of ~430 MiB |
+| `PORT` | Set by Railway; the backend listens on it |
+
+## 5. Public domain for the API
+
+`backend` → **Settings → Networking → Generate Domain** → e.g. `engiens-backend-production.up.railway.app` (HTTPS
+automatic). The deploy log should show `Successfully applied 11 migrations` (first start), `Code execution ready:
+runner service at http://runner.railway.internal:8090`, and `Started BackendApplication`.
 
 ```bash
-curl -fsS https://<RAILWAY_DOMAIN>/actuator/health     # {"status":"UP",...}
+curl -fsS https://<RAILWAY_DOMAIN>/actuator/health      # {"status":"UP",...}
 ```
 
-Later, a custom domain (e.g. `api.engiens.in`) is **Settings → Networking → Custom Domain** plus a CNAME record.
+If the log says `Code execution unavailable (runner service …)`, check that the runner is deployed and that
+`SCENARIO_RUNNER_TOKEN` resolves to its `RUNNER_TOKEN`. A custom domain later: **Networking → Custom Domain** + CNAME.
 
-## 5. Frontend on Vercel
+## 6. Frontend on Vercel
 
-1. vercel.com → **Add New → Project** → import the `Engiens` repository.
-2. **Root Directory**: `frontend`. Framework preset: **Vite** (build `npm run build`, output `dist`), detected automatically.
-3. **Environment Variables** (Production): `VITE_API_URL` = `https://<RAILWAY_DOMAIN>` (no trailing slash).
-   This is the frontend's API base URL. The code reads `VITE_API_URL`; it is the only frontend variable and contains no
-   secret. Vite bakes it in at build time, so after changing it, redeploy.
-4. **Deploy**. `frontend/vercel.json` gives SPA routing (`/progress`, `/reviews/:id`, `/scenario-lab`, … load directly),
-   long caching for hashed assets, and the security headers. Its CSP allows API calls to any HTTPS origin; once the
-   Railway domain is final you can tighten `connect-src 'self' https:` to `connect-src 'self' https://<RAILWAY_DOMAIN>`.
+1. vercel.com (signed in with the new GitHub account) → **Add New → Project** → import the repository.
+2. **Root Directory**: `frontend`; framework **Vite** (detected).
+3. **Environment Variables** (Production): `VITE_API_URL` = `https://<RAILWAY_DOMAIN>`. This is the API base URL;
+   the code reads `VITE_API_URL` (the only frontend variable, no secrets). Vite builds it in: redeploy after changing it.
+4. **Deploy**. `vercel.json` handles SPA routes (`/progress`, `/reviews/:id`, `/scenario-lab`, …), caching and
+   security headers. Optional: tighten its CSP `connect-src 'self' https:` to `https://<RAILWAY_DOMAIN>`.
 
-## 6. Connect the two: CORS and FRONTEND_URL
+## 7. Connect them: CORS and FRONTEND_URL
 
-Copy the production Vercel URL (e.g. `https://engiens.vercel.app`; preview URLs are different and won't be allowed).
-In Railway, set `CORS_ALLOWED_ORIGIN` and `FRONTEND_URL` to it (several origins: comma-separated) → the backend
-redeploys. Check that the browser may call the API:
+Set `CORS_ALLOWED_ORIGIN` and `FRONTEND_URL` on `backend` to the production Vercel URL (e.g.
+`https://engiens.vercel.app`; comma-separate several). Railway redeploys. Check:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS https://<RAILWAY_DOMAIN>/api/auth/login \
   -H 'Origin: https://engiens.vercel.app' -H 'Access-Control-Request-Method: POST'     # 200
 ```
 
-## 7. GitHub App (optional: private repositories)
+## 8. GitHub App (optional: private repositories)
 
-GitHub → Settings → Developer settings → GitHub Apps → your app → add the **Callback URL**
-`https://<RAILWAY_DOMAIN>/api/github/callback` (keep the localhost one for development). Put the `GITHUB_APP_*`
-values in Railway. Public repositories work without any of this.
+Create or reuse a GitHub App under the **new** account → add the Callback URL
+`https://<RAILWAY_DOMAIN>/api/github/callback` → put its `GITHUB_APP_*` values on `backend` (private key on one line).
+Public repositories work without it.
 
-## 8. Production smoke test
+## 9. Production smoke test
 
 On the Vercel URL, in a private window:
 
-1. Landing page loads; `/progress` opened directly loads too (SPA routing).
-2. Register, log out, log in. After five wrong passwords for one account, the next attempt says "Too many login attempts".
-3. Import a public repository; an invalid link (`https://example.com/x`) is rejected with a clear message.
-4. Run a review; open it; export the review PDF.
-5. From the review, start a 5-scenario lab: the setup screen shows the "Code can't be run on this server" note;
-   scenarios are approach-only.
-6. Answer one in writing → Submit → feedback appears; submitting again is refused.
-7. Finish the lab → historical report → lab PDF.
-8. Progress shows the review and lab evidence; the repository filter works.
-9. Repository page → Check for new commits (after pushing to a test repository) → review again → Progress shows a
-   project-level change.
-10. Open another user's review id in the URL → "not found".
-11. Response headers: `curl -sI https://<RAILWAY_DOMAIN>/actuator/health` shows `Strict-Transport-Security` and the CSP;
-    the Vercel site shows its CSP and HSTS.
+1. Landing page; `/progress` opened directly also loads.
+2. Register, log out, log in; after five wrong passwords the next attempt says "Too many login attempts".
+3. Import a public repository; an invalid link is rejected clearly.
+4. Review → review PDF.
+5. Review → Scenario Lab (5 scenarios): the setup screen shows **no** "can't run code" note; scenarios are code-first.
+6. Open a scenario → edit code → **Run**: real check results from the runner (Python, and a TypeScript or Java one
+   if the lab has one). A deliberately infinite loop reports "Took longer than …".
+7. Submit → feedback; submitting again is refused.
+8. Finish → historical report → lab PDF.
+9. Progress shows review and lab evidence.
+10. Check for new commits (after pushing to a test repository) → review again → Progress shows a project-level change.
+11. Another user's review id in the URL → "not found".
+12. `curl -sI https://<RAILWAY_DOMAIN>/actuator/health`: HSTS and CSP present; the Vercel site has its CSP and HSTS.
+13. The runner is not public: `runner` → Settings → Networking shows no public domain, only the private one.
 
-Real client IPs: the login/sign-up limits key on the client address that Railway's proxy forwards. Check once that
-sign-ups from two different networks (laptop and phone hotspot) are limited separately. If everyone shares one limit,
-add the variable `SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES` with a regex matching Railway's proxy addresses.
+Real client IPs: login/sign-up limits use the client address Railway's proxy forwards. Check once that sign-ups from
+two networks (laptop and phone hotspot) are limited separately; if everyone shares one limit, set
+`SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES` on `backend` to a regex matching Railway's proxy addresses.
 
-## 9. Backups
-
-From your machine (Docker needed, nothing else):
+## 10. Backups
 
 ```bash
 # Railway → Postgres → Variables → copy DATABASE_PUBLIC_URL. The leading space keeps it out of shell history.
  DATABASE_URL='<DATABASE_PUBLIC_URL>' sh deploy/backup.sh
 ```
 
-Dumps go to `deploy/backups/` (git-ignored, owner-only). Take one before every deploy that adds a migration.
-Restore instructions are at the top of `backup.sh`.
+Dumps go to `deploy/backups/` (git-ignored, owner-only); restore instructions are in `backup.sh`. Take one before any
+deploy that adds a migration.
 
-## 10. Updating and rolling back
+## 11. Updating and rolling back
 
-- **Update:** push to `main`. Railway builds the backend when `backend/**` changed; Vercel builds the frontend.
-- **Rollback:** Railway → backend → Deployments → an earlier deployment → **Redeploy**; Vercel → Deployments →
-  an earlier one → **Promote to Production**. Migrations only move forward: if the deploy you're leaving added a
-  migration, restore the backup taken before it first.
+- **Update:** push to `main`. Railway rebuilds `backend` when `backend/**` changes and `runner` when `runner/**`
+  changes; Vercel rebuilds the frontend.
+- **Rollback:** Railway → service → Deployments → an earlier one → **Redeploy**; Vercel → **Promote to Production**.
+  Migrations only move forward: restore the pre-deploy backup first if the release you're leaving added one.
 
-## Running it yourself with code execution
+## Local development (unchanged)
 
-Any machine with Docker can run the same image with code execution on: pull the sandbox images
-(`sh deploy/sandbox-images.sh`), run the backend container with `SCENARIO_EXECUTION_ENABLED=true`, the host's
-`/var/run/docker.sock` mounted and the socket's group added (`--group-add $(stat -c %g /var/run/docker.sock)`), plus
-the variables above. Every sandbox run then uses the digest-pinned images with no network, no mounts and strict limits.
+`make db`, `make sandbox-images`, `make backend`, `make frontend`. Locally the backend uses the Docker sandbox
+(`scenario.execution.provider=docker`). To try the runner locally instead:
+`RUNNER_TOKEN=<16+ chars> python3 runner/engiens_runner.py`, then start the backend with
+`SCENARIO_EXECUTION_PROVIDER=runner SCENARIO_RUNNER_URL=http://localhost:8090 SCENARIO_RUNNER_TOKEN=<same>`.

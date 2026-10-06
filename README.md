@@ -37,11 +37,17 @@ The backend reads its configuration from environment variables (or the root `.en
 
 ## Scenario Lab code sandbox
 
-Scenario Lab runs user code only inside throwaway Docker containers: no network, no host folders, no environment
-variables or secrets, a read-only image, an unprivileged user, and limits on memory, CPU, processes and time. The
-backend needs Docker on the same machine (`make sandbox-images` pulls the Python, Node and Java images once).
-Without Docker, or with `SCENARIO_EXECUTION_ENABLED=false`, Run is unavailable and labs fall back to approach-only
-scenarios. `SCENARIO_EXECUTION_MAX_CONCURRENT` (default 2) limits sandboxes running at once.
+Locally, Scenario Lab runs user code only inside throwaway Docker containers: no network, no host folders, no
+environment variables or secrets, a read-only image, an unprivileged user, and limits on memory, CPU, processes and
+time (`make sandbox-images` pulls the digest-pinned Python, Node and Java images once).
+
+Where containers can't be started (Railway), the same runs go to the **scenario runner** service (`runner/`):
+`SCENARIO_EXECUTION_PROVIDER=runner` with `SCENARIO_RUNNER_URL` and `SCENARIO_RUNNER_TOKEN`. It runs each command in its
+own temporary directory and process group, as an unprivileged user, with an emptied environment, a time limit and
+resource limits; it isolates processes rather than containers, so it has no network isolation (see `deploy/README.md`).
+
+Without either, or with `SCENARIO_EXECUTION_ENABLED=false`, Run is unavailable and labs fall back to approach-only
+scenarios (the lab setup screen says so). `SCENARIO_EXECUTION_MAX_CONCURRENT` (default 2) limits runs at once.
 
 ## GitHub App (private repositories, optional)
 
@@ -62,10 +68,10 @@ id is stored, and short-lived access tokens are minted per request and never per
 
 ## Deployment
 
-The frontend is deployed on Vercel and the backend with its managed PostgreSQL on Railway; the step-by-step runbook
-and configuration are in [`deploy/`](deploy/README.md). Railway can't start Docker containers, so the deployed
-Scenario Lab is approach-only (scenarios answered in writing, and the setup screen says so); executable scenarios with
-Run and hidden checks work wherever the backend runs next to Docker, such as local development.
+The frontend is deployed on Vercel; the backend, its managed PostgreSQL and a small **scenario runner** service run on
+Railway. Scenario Lab code runs on the runner over Railway's private network (Railway can't start the Docker containers
+the local sandbox uses), so the deployed platform supports code-first scenarios with Run and hidden checks. The
+step-by-step runbook and configuration are in [`deploy/`](deploy/README.md).
 
 ## Tests
 
@@ -87,7 +93,7 @@ Modular monolith (`backend/src/main/java/com/engineeringlens`):
 | `analysis` | review preparation without AI: profiler, deterministic rules, context builder (`/api/repositories/{id}/analyses`) |
 | `analysis.ai` | provider-neutral AI layer: Gemini and Groq providers, model router with retries, fallback and per-model cooldowns |
 | `analysis.review` | AI engineering review: rubric, prompt, output validation, background runs, persistence (`/api/repositories/{id}/reviews`, `/api/reviews`) |
-| `scenario` | Scenario Lab: lab lifecycle (`lab`), generation and harness validation (`generation`), sandbox (`execution`), workspace/run/submit (`workspace`), evaluation (`evaluation`), history (`history`) |
+| `scenario` | Scenario Lab: lab lifecycle (`lab`), generation and harness validation (`generation`), code execution (`execution`: local Docker sandbox or the remote runner), workspace/run/submit (`workspace`), evaluation (`evaluation`), history (`history`) |
 | `progress` | Progress: deterministic, evidence-based indicators per rubric area from stored reviews and completed labs; no new tables, no AI calls (`/api/progress`, `/api/progress/history`) |
 | `export` | server-side PDFs of reviews and lab assessments, from persisted data |
 | `common` | shared error model, global exception handler, PDF typesetting |
