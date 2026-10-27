@@ -7,6 +7,12 @@ You connect a GitHub repository and get a structured engineering review against 
 you practise realistic scenarios generated from *that* repository: fix the code against hidden checks, or explain your
 approach. Your engineering progress is tracked over time from the evidence.
 
+### Demo Video
+
+Watch the **Engiens product demonstration** to see the application and its main workflows in action.
+
+[▶ Watch the Engiens Demo Video](https://drive.google.com/file/d/1zBYtdKcfqEumXe3SG1VSSZFBag1NkUA6/view?usp=sharing)
+
 - **[ARCHITECTURE.md](ARCHITECTURE.md):** eight Mermaid diagrams (system, modules, review pipeline, Scenario Lab, code
   execution, auth, data model, deployment).
 - **[DECISIONS.md](DECISIONS.md):** the engineering decisions, the alternatives considered, the trade-offs, and known
